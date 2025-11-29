@@ -160,10 +160,18 @@ SESSION_SAVE_EVERY_REQUEST = True  # Refresh session on every request
 # Security Settings (Production)
 # ===========================
 if not DEBUG:
+    # Trust proxy headers
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = False  # Nginx handles this
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
+    
+    SECURE_SSL_REDIRECT = False  # Proxy handles this
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'SAMEORIGIN'
+    
+    # Fix CSRF for proxy setups - trust the origin header
+    CSRF_COOKIE_DOMAIN = None
+    CSRF_USE_SESSIONS = False
