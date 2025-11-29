@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Quick Add -->
+    <div class="quick-add">
+        <input type="text" 
+               id="quickAddInput" 
+               class="quick-add-input" 
+               placeholder="Добавить задачу... (нажмите Enter)"
+               autocomplete="off">
+        <button class="btn btn-primary" onclick="quickAddTask()">
+            <i class="ri-add-line"></i>
+        </button>
+    </div>
+    
+    <!-- Active Tasks -->
+    <div class="task-section">
+        <div class="task-section-header">
+            <h2 class="task-section-title">Активные задачи</h2>
+            <span class="task-section-count">{{ tasks|length }}</span>
+        </div>
+        
+        {% if tasks %}
+        <div class="task-list">
+            {% for task in tasks %}
+            <div class="task-item {% if task.is_completed %}completed{% endif %}" data-id="{{ task.id }}" data-priority="{{ task.priority }}">
+                <div class="task-checkbox">
+                    <input type="checkbox" id="task-{{ task.id }}" {% if task.is_completed %}checked{% endif %}>
+                    <label for="task-{{ task.id }}"></label>
+                </div>
+                <div class="task-content">
+                    <a href="{% url 'scope:task_detail' task.id %}" class="task-title">{{ task.title }}</a>
+                    {% if task.description %}
+                    <p class="task-description">{{ task.description|truncatewords:20 }}</p>
+                    {% endif %}
+                    <div class="task-meta">
+                        {% if task.due_date %}
+                        <span class="task-due {% if task.is_overdue %}overdue{% endif %}">
+                            <i class="ri-calendar-line"></i>
+                            {{ task.due_date|date:"d M" }}
+                        </span>
+                        {% endif %}
+                        {% if task.project %}
+                        <span class="task-project" style="color: {{ task.project.color }}">
+                            <i class="ri-folder-line"></i>
+                            {{ task.project.name }}
+                        </span>
+                        {% endif %}
+                        {% if task.checklist_progress %}
+                        <span class="task-checklist-progress">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" style="width: {{ task.checklist_progress.percent }}%"></div>
+                            </div>
+                            {{ task.checklist_progress.completed }}/{{ task.checklist_progress.total }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if task.tags.exists %}
+                    <div class="task-tags">
+                        {% for tag in task.tags.all %}
+                        <span class="task-tag" style="background: {{ tag.color }}20; color: {{ tag.color }}">{{ tag.name }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="task-priority priority-{% if task.priority == 1 %}low{% elif task.priority == 2 %}medium{% elif task.priority == 3 %}high{% else %}urgent{% endif %}"></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="ri-checkbox-circle-line"></i>
+            </div>
+            <h3 class="empty-state-title">Нет активных задач</h3>
+            <p class="empty-state-text">Добавьте новую задачу, чтобы начать работу</p>
+            <button class="btn btn-primary" onclick="openTaskModal()">
+                <i class="ri-add-line"></i>
+                Создать задачу
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if completed_tasks %}
+    <!-- Completed Tasks -->
+    <div class="task-section">
+        <div class="task-section-header">
+            <h2 class="task-section-title">Завершённые</h2>
+            <span class="task-section-count">{{ completed_tasks|length }}</span>
+        </div>
+        
+        <div class="task-list">
+            {% for task in completed_tasks %}
+            <div class="task-item completed" data-id="{{ task.id }}">
+                <div class="task-checkbox">
+                    <input type="checkbox" id="task-{{ task.id }}" checked>
+                    <label for="task-{{ task.id }}"></label>
+                </div>
+                <div class="task-content">
+                    <a href="{% url 'scope:task_detail' task.id %}" class="task-title">{{ task.title }}</a>
+                    <div class="task-meta">
+                        {% if task.completed_at %}
+                        <span class="task-completed-at">
+                            <i class="ri-check-line"></i>
+                            Завершено {{ task.completed_at|date:"d M" }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

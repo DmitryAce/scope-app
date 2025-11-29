@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="form-page" style="max-width: 600px;">
+    <h1 class="page-title" style="margin-bottom: 24px;">
+        {% if project %}Редактировать проект{% else %}Новый проект{% endif %}
+    </h1>
+    
+    <div class="form-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px;">
+        <form method="POST" action="{% if project %}{% url 'scope:project_edit' project.id %}{% else %}{% url 'scope:project_create' %}{% endif %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label">Название проекта</label>
+                <input type="text" 
+                       name="name" 
+                       class="form-input form-input-lg" 
+                       placeholder="Введите название..."
+                       value="{{ project.name|default:'' }}"
+                       required 
+                       autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea name="description" 
+                          class="form-input" 
+                          placeholder="Краткое описание проекта (опционально)"
+                          rows="3">{{ project.description|default:'' }}</textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Цвет проекта</label>
+                <div class="color-picker">
+                    <input type="color" name="color" value="{{ project.color|default:'#7C3AED' }}" class="color-input">
+                    <div class="color-presets">
+                        <button type="button" class="color-preset" style="background: #7C3AED" data-color="#7C3AED"></button>
+                        <button type="button" class="color-preset" style="background: #8B2942" data-color="#8B2942"></button>
+                        <button type="button" class="color-preset" style="background: #2563EB" data-color="#2563EB"></button>
+                        <button type="button" class="color-preset" style="background: #059669" data-color="#059669"></button>
+                        <button type="button" class="color-preset" style="background: #D97706" data-color="#D97706"></button>
+                        <button type="button" class="color-preset" style="background: #DC2626" data-color="#DC2626"></button>
+                        <button type="button" class="color-preset" style="background: #EC4899" data-color="#EC4899"></button>
+                        <button type="button" class="color-preset" style="background: #6366F1" data-color="#6366F1"></button>
+                    </div>
+                </div>
+            </div>
+            
+            {% if project %}
+            <div class="form-group">
+                <label class="form-label" style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                    <input type="checkbox" name="is_archived" value="true" {% if project.is_archived %}checked{% endif %} style="width: 18px; height: 18px;">
+                    Архивировать проект
+                </label>
+            </div>
+            {% endif %}
+            
+            <div class="form-actions" style="display: flex; gap: 12px; margin-top: 24px;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="ri-check-line"></i>
+                    {% if project %}Сохранить{% else %}Создать проект{% endif %}
+                </button>
+                <a href="{% if project %}{% url 'scope:project_detail' project.id %}{% else %}{% url 'scope:project_list' %}{% endif %}" class="btn btn-ghost">
+                    Отмена
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

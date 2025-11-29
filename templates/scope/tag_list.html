@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="tags-view">
+    <div class="tags-header" style="margin-bottom: 24px;">
+        <button class="btn btn-primary" onclick="openTagModal()">
+            <i class="ri-add-line"></i>
+            Новый тег
+        </button>
+    </div>
+    
+    {% if tag_list %}
+    <div class="tags-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+        {% for tag in tag_list %}
+        <div class="tag-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="tag-dot" style="background: {{ tag.color }}; width: 12px; height: 12px;"></span>
+                <span style="font-weight: 500;">{{ tag.name }}</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <span style="color: var(--text-muted); font-size: 13px;">{{ tag.tasks.count }} задач</span>
+                <button class="btn-icon" onclick="deleteTag({{ tag.id }})" style="color: var(--text-muted);">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">
+            <i class="ri-price-tag-3-line"></i>
+        </div>
+        <h3 class="empty-state-title">Нет тегов</h3>
+        <p class="empty-state-text">Создайте теги для лучшей организации задач</p>
+        <button class="btn btn-primary" onclick="openTagModal()">
+            <i class="ri-add-line"></i>
+            Создать тег
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function deleteTag(tagId) {
+    if (!confirm('Удалить этот тег?')) return;
+    
+    fetch(`/tags/${tagId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+</script>
+{% endblock %}
+

@@ -1,0 +1,745 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="task-detail animate-fade-in">
+    <div class="task-detail-header">
+        <div class="task-checkbox task-detail-checkbox">
+            <input type="checkbox" id="task-main-{{ task.id }}" {% if task.is_completed %}checked{% endif %} onchange="toggleTask({{ task.id }})">
+            <label for="task-main-{{ task.id }}"></label>
+        </div>
+        <input type="text" 
+               class="task-detail-title-input {% if task.is_completed %}completed{% endif %}" 
+               id="taskTitleInput"
+               value="{{ task.title }}"
+               data-task-id="{{ task.id }}"
+               onkeydown="if(event.key === 'Enter') { this.blur(); }"
+               onblur="saveTaskTitle({{ task.id }})">
+        <div class="task-detail-actions">
+            <a href="{% url 'scope:task_edit' task.id %}" class="btn btn-ghost">
+                <i class="ri-edit-line"></i>
+                Ещё
+            </a>
+            <button class="btn btn-ghost" onclick="deleteTask({{ task.id }})" style="color: var(--priority-urgent);">
+                <i class="ri-delete-bin-line"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div class="task-detail-body">
+        <!-- Info Section -->
+        <div class="task-detail-section">
+            <div class="task-detail-info">
+                <div class="info-item info-item-priority">
+                    <span class="info-label">Приоритет</span>
+                    <div class="priority-selector" id="prioritySelector" data-current="{{ task.priority }}">
+                        <button type="button" class="priority-option {% if task.priority == 1 %}active{% endif %}" data-priority="1" onclick="setPriority({{ task.id }}, 1)" title="Низкий">
+                            <span class="priority-dot priority-low"></span>
+                        </button>
+                        <button type="button" class="priority-option {% if task.priority == 2 %}active{% endif %}" data-priority="2" onclick="setPriority({{ task.id }}, 2)" title="Средний">
+                            <span class="priority-dot priority-medium"></span>
+                        </button>
+                        <button type="button" class="priority-option {% if task.priority == 3 %}active{% endif %}" data-priority="3" onclick="setPriority({{ task.id }}, 3)" title="Высокий">
+                            <span class="priority-dot priority-high"></span>
+                        </button>
+                        <button type="button" class="priority-option {% if task.priority == 4 %}active{% endif %}" data-priority="4" onclick="setPriority({{ task.id }}, 4)" title="Срочный">
+                            <span class="priority-dot priority-urgent"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                {% if task.project %}
+                <div class="info-item">
+                    <span class="info-label">Проект</span>
+                    <span class="info-value">
+                        <span style="color: {{ task.project.color }}">{{ task.project.name }}</span>
+                    </span>
+                </div>
+                {% endif %}
+                
+                {% if task.due_date %}
+                <div class="info-item">
+                    <span class="info-label">Срок</span>
+                    <span class="info-value {% if task.is_overdue %}overdue{% endif %}">
+                        {{ task.due_date|date:"d F Y" }}
+                        {% if task.due_time %}в {{ task.due_time|time:"H:i" }}{% endif %}
+                    </span>
+                </div>
+                {% endif %}
+                
+                <div class="info-item">
+                    <span class="info-label">Создано</span>
+                    <span class="info-value">{{ task.created_at|date:"d F Y, H:i" }}</span>
+                </div>
+                
+                {% if task.is_completed %}
+                <div class="info-item">
+                    <span class="info-label">Завершено</span>
+                    <span class="info-value" style="color: var(--priority-low)">{{ task.completed_at|date:"d F Y, H:i" }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if task.description %}
+        <!-- Description Section -->
+        <div class="task-detail-section">
+            <h3 class="task-detail-section-title">
+                <i class="ri-file-text-line"></i>
+                Описание
+            </h3>
+            <p class="task-detail-description">{{ task.description }}</p>
+        </div>
+        {% endif %}
+        
+        {% if task.tags.exists %}
+        <!-- Tags Section -->
+        <div class="task-detail-section">
+            <h3 class="task-detail-section-title">
+                <i class="ri-price-tag-3-line"></i>
+                Теги
+            </h3>
+            <div class="task-tags">
+                {% for tag in task.tags.all %}
+                <span class="task-tag" style="background: {{ tag.color }}20; color: {{ tag.color }}; padding: 4px 12px; font-size: 13px;">
+                    {{ tag.name }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Checklist Section -->
+        <div class="task-detail-section">
+            <h3 class="task-detail-section-title">
+                <i class="ri-checkbox-multiple-line"></i>
+                Чек-лист
+                {% if task.checklist_progress %}
+                <span class="task-checklist-progress" style="margin-left: auto; font-weight: normal;">
+                    <div class="progress-bar" style="width: 100px;">
+                        <div class="progress-bar-fill" style="width: {{ task.checklist_progress.percent }}%"></div>
+                    </div>
+                    <span class="checklist-progress-text">{{ task.checklist_progress.completed }}/{{ task.checklist_progress.total }}</span>
+                </span>
+                {% endif %}
+            </h3>
+            
+            <div class="checklist">
+                {% for item in task.checklist_items.all %}
+                <div class="checklist-item {% if item.is_completed %}completed{% endif %}" data-id="{{ item.id }}">
+                    <div class="task-checkbox">
+                        <input type="checkbox" id="check-{{ item.id }}" {% if item.is_completed %}checked{% endif %} onchange="toggleChecklistItem({{ item.id }})">
+                        <label for="check-{{ item.id }}"></label>
+                    </div>
+                    <span class="checklist-text">{{ item.text }}</span>
+                    <button class="btn-icon checklist-delete" onclick="deleteChecklistItem({{ item.id }})">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+                {% endfor %}
+                
+                <div class="checklist-add">
+                    <input type="text" 
+                           id="checklistInput" 
+                           class="form-input" 
+                           placeholder="Добавить пункт..."
+                           onkeypress="if(event.key === 'Enter') addChecklistItem({{ task.id }})">
+                    <button class="btn btn-ghost" onclick="addChecklistItem({{ task.id }})">
+                        <i class="ri-add-line"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Links Section -->
+        <div class="task-detail-section">
+            <h3 class="task-detail-section-title">
+                <i class="ri-link"></i>
+                Ссылки
+            </h3>
+            
+            <div class="links-list" id="linksList">
+                {% for link in task.links.all %}
+                <div class="link-item" data-id="{{ link.id }}">
+                    <img src="{{ link.favicon_url }}" alt="" class="link-favicon">
+                    <a href="{{ link.url }}" target="_blank" rel="noopener" class="link-content">
+                        <span class="link-title">{{ link.display_title }}</span>
+                        <span class="link-url">{{ link.url|truncatechars:50 }}</span>
+                    </a>
+                    <button class="btn-icon link-delete" onclick="deleteLink({{ link.id }})">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="link-add">
+                <div class="link-add-fields">
+                    <input type="url" 
+                           id="linkUrlInput" 
+                           class="form-input" 
+                           placeholder="https://example.com">
+                    <input type="text" 
+                           id="linkTitleInput" 
+                           class="form-input link-title-input" 
+                           placeholder="Название (опционально)">
+                </div>
+                <button class="btn btn-ghost" onclick="addLink({{ task.id }})">
+                    <i class="ri-add-line"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Attachments Section -->
+        <div class="task-detail-section">
+            <h3 class="task-detail-section-title">
+                <i class="ri-attachment-2"></i>
+                Вложения
+            </h3>
+            
+            <div class="attachments-list" id="attachmentsList">
+                {% for att in task.attachments.all %}
+                <div class="attachment-item" data-id="{{ att.id }}">
+                    <i class="{{ att.file_icon }} attachment-icon"></i>
+                    <a href="{{ att.file.url }}" target="_blank" class="attachment-content">
+                        <span class="attachment-name">{{ att.filename }}</span>
+                        <span class="attachment-size">{{ att.file_size_display }}</span>
+                    </a>
+                    <button class="btn-icon attachment-delete" onclick="deleteAttachment({{ att.id }})">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="attachment-add">
+                <label class="attachment-drop-zone" id="dropZone">
+                    <input type="file" id="attachmentInput" onchange="uploadAttachment({{ task.id }})" hidden>
+                    <i class="ri-upload-cloud-line"></i>
+                    <span>Перетащите файл или нажмите для выбора</span>
+                    <span class="attachment-hint">Макс. 10 МБ</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Inline Title Edit */
+.task-detail-title-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: all var(--transition-fast);
+}
+
+.task-detail-title-input:hover {
+    background: var(--bg-tertiary);
+}
+
+.task-detail-title-input:focus {
+    background: var(--bg-tertiary);
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.task-detail-title-input.completed {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.task-detail-title-input.saving {
+    opacity: 0.6;
+}
+
+/* Priority Selector */
+.priority-selector {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+}
+
+.priority-option {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    background: transparent;
+    border: none;
+}
+
+.priority-option:hover {
+    background: var(--bg-elevated);
+}
+
+.priority-option.active {
+    background: var(--bg-elevated);
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.priority-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.info-value.overdue {
+    color: var(--priority-urgent);
+}
+
+/* Links Styles */
+.links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.link-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.link-item:hover {
+    background: var(--bg-elevated);
+}
+
+.link-favicon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.link-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    text-decoration: none;
+}
+
+.link-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.link-url {
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.link-delete {
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.link-item:hover .link-delete {
+    opacity: 1;
+}
+
+.link-add {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.link-add-fields {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+}
+
+.link-add-fields .form-input {
+    flex: 1;
+}
+
+.link-title-input {
+    max-width: 200px;
+}
+
+/* Attachments Styles */
+.attachments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.attachment-item:hover {
+    background: var(--bg-elevated);
+}
+
+.attachment-icon {
+    font-size: 20px;
+    color: var(--accent-secondary);
+    flex-shrink: 0;
+}
+
+.attachment-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    text-decoration: none;
+}
+
+.attachment-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attachment-size {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.attachment-delete {
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.attachment-item:hover .attachment-delete {
+    opacity: 1;
+}
+
+.attachment-drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    color: var(--text-muted);
+}
+
+.attachment-drop-zone:hover,
+.attachment-drop-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.05);
+    color: var(--text-secondary);
+}
+
+.attachment-drop-zone i {
+    font-size: 32px;
+}
+
+.attachment-hint {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+/* Uploading state */
+.attachment-drop-zone.uploading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.attachment-drop-zone.uploading::after {
+    content: 'Загрузка...';
+    position: absolute;
+}
+</style>
+
+<script>
+// Links
+function addLink(taskId) {
+    const urlInput = document.getElementById('linkUrlInput');
+    const titleInput = document.getElementById('linkTitleInput');
+    const url = urlInput.value.trim();
+    const title = titleInput.value.trim();
+    
+    if (!url) {
+        urlInput.focus();
+        return;
+    }
+    
+    fetch(`/tasks/${taskId}/links/add/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const list = document.getElementById('linksList');
+            const item = document.createElement('div');
+            item.className = 'link-item';
+            item.dataset.id = data.id;
+            item.innerHTML = `
+                <img src="${data.favicon}" alt="" class="link-favicon">
+                <a href="${data.url}" target="_blank" rel="noopener" class="link-content">
+                    <span class="link-title">${escapeHtml(data.title)}</span>
+                    <span class="link-url">${escapeHtml(data.url.substring(0, 50))}${data.url.length > 50 ? '...' : ''}</span>
+                </a>
+                <button class="btn-icon link-delete" onclick="deleteLink(${data.id})">
+                    <i class="ri-close-line"></i>
+                </button>
+            `;
+            list.appendChild(item);
+            urlInput.value = '';
+            titleInput.value = '';
+        } else {
+            alert(data.error || 'Ошибка при добавлении ссылки');
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+function deleteLink(linkId) {
+    fetch(`/links/${linkId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const item = document.querySelector(`.link-item[data-id="${linkId}"]`);
+            if (item) item.remove();
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+// Enter to add link
+document.getElementById('linkUrlInput')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addLink({{ task.id }});
+    }
+});
+
+document.getElementById('linkTitleInput')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addLink({{ task.id }});
+    }
+});
+
+// Attachments
+function uploadAttachment(taskId) {
+    const input = document.getElementById('attachmentInput');
+    const dropZone = document.getElementById('dropZone');
+    
+    if (!input.files.length) return;
+    
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    dropZone.classList.add('uploading');
+    
+    fetch(`/tasks/${taskId}/attachments/add/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+    })
+    .then(response => response.json())
+    .then(data => {
+        dropZone.classList.remove('uploading');
+        if (data.success) {
+            const list = document.getElementById('attachmentsList');
+            const item = document.createElement('div');
+            item.className = 'attachment-item';
+            item.dataset.id = data.id;
+            item.innerHTML = `
+                <i class="${data.icon} attachment-icon"></i>
+                <a href="${data.file_url}" target="_blank" class="attachment-content">
+                    <span class="attachment-name">${escapeHtml(data.filename)}</span>
+                    <span class="attachment-size">${data.file_size}</span>
+                </a>
+                <button class="btn-icon attachment-delete" onclick="deleteAttachment(${data.id})">
+                    <i class="ri-close-line"></i>
+                </button>
+            `;
+            list.appendChild(item);
+            input.value = '';
+        } else {
+            alert(data.error || 'Ошибка при загрузке файла');
+        }
+    })
+    .catch(error => {
+        dropZone.classList.remove('uploading');
+        console.error('Error:', error);
+    });
+}
+
+function deleteAttachment(attId) {
+    fetch(`/attachments/${attId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const item = document.querySelector(`.attachment-item[data-id="${attId}"]`);
+            if (item) item.remove();
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+// Drag and Drop
+const dropZone = document.getElementById('dropZone');
+const attachmentInput = document.getElementById('attachmentInput');
+
+if (dropZone) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+    });
+    
+    dropZone.addEventListener('drop', function(e) {
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            attachmentInput.files = files;
+            uploadAttachment({{ task.id }});
+        }
+    }, false);
+}
+
+// Inline Title Edit
+function saveTaskTitle(taskId) {
+    const input = document.getElementById('taskTitleInput');
+    const newTitle = input.value.trim();
+    
+    if (!newTitle) {
+        // Восстановить предыдущее значение
+        input.value = input.defaultValue;
+        return;
+    }
+    
+    if (newTitle === input.defaultValue) return;
+    
+    input.classList.add('saving');
+    
+    fetch(`/tasks/${taskId}/update-inline/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: `title=${encodeURIComponent(newTitle)}`,
+    })
+    .then(response => response.json())
+    .then(data => {
+        input.classList.remove('saving');
+        if (data.success) {
+            input.defaultValue = data.title;
+            // Показать короткую индикацию успеха
+            input.style.boxShadow = '0 0 0 2px var(--priority-low)';
+            setTimeout(() => {
+                input.style.boxShadow = '';
+            }, 500);
+        }
+    })
+    .catch(error => {
+        input.classList.remove('saving');
+        console.error('Error:', error);
+    });
+}
+
+// Priority Change
+function setPriority(taskId, priority) {
+    const selector = document.getElementById('prioritySelector');
+    const currentPriority = parseInt(selector.dataset.current);
+    
+    if (priority === currentPriority) return;
+    
+    // Обновляем UI сразу
+    selector.querySelectorAll('.priority-option').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.priority) === priority);
+    });
+    selector.dataset.current = priority;
+    
+    fetch(`/tasks/${taskId}/update-inline/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: `priority=${priority}`,
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            // Откат если ошибка
+            selector.querySelectorAll('.priority-option').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.priority) === currentPriority);
+            });
+            selector.dataset.current = currentPriority;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="today-view">
+    <!-- Quick Add -->
+    <div class="quick-add">
+        <input type="text" 
+               id="quickAddInput" 
+               class="quick-add-input" 
+               placeholder="Добавить задачу на сегодня..."
+               data-due-date="{{ today|date:'Y-m-d' }}"
+               autocomplete="off">
+        <button class="btn btn-primary" onclick="quickAddTask()">
+            <i class="ri-add-line"></i>
+        </button>
+    </div>
+    
+    {% if overdue_tasks %}
+    <!-- Overdue Tasks -->
+    <div class="task-section">
+        <div class="task-section-header">
+            <h2 class="task-section-title" style="color: var(--priority-urgent)">
+                <i class="ri-alarm-warning-line"></i>
+                Просроченные
+            </h2>
+            <span class="task-section-count" style="background: var(--priority-urgent); color: white;">{{ overdue_tasks|length }}</span>
+        </div>
+        
+        <div class="task-list">
+            {% for task in overdue_tasks %}
+            <div class="task-item" data-id="{{ task.id }}" style="border-color: var(--priority-urgent);">
+                <div class="task-checkbox">
+                    <input type="checkbox" id="task-{{ task.id }}">
+                    <label for="task-{{ task.id }}"></label>
+                </div>
+                <div class="task-content">
+                    <a href="{% url 'scope:task_detail' task.id %}" class="task-title">{{ task.title }}</a>
+                    <div class="task-meta">
+                        <span class="task-due overdue">
+                            <i class="ri-calendar-line"></i>
+                            {{ task.due_date|date:"d M" }}
+                        </span>
+                        {% if task.project %}
+                        <span class="task-project" style="color: {{ task.project.color }}">{{ task.project.name }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="task-priority priority-{% if task.priority == 4 %}urgent{% elif task.priority == 3 %}high{% else %}medium{% endif %}"></div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Today's Tasks -->
+    <div class="task-section">
+        <div class="task-section-header">
+            <h2 class="task-section-title">
+                <i class="ri-sun-line"></i>
+                Задачи на сегодня
+            </h2>
+            <span class="task-section-count">{{ tasks|length }}</span>
+        </div>
+        
+        {% if tasks %}
+        <div class="task-list">
+            {% for task in tasks %}
+            <div class="task-item {% if task.is_completed %}completed{% endif %}" data-id="{{ task.id }}">
+                <div class="task-checkbox">
+                    <input type="checkbox" id="task-{{ task.id }}" {% if task.is_completed %}checked{% endif %}>
+                    <label for="task-{{ task.id }}"></label>
+                </div>
+                <div class="task-content">
+                    <a href="{% url 'scope:task_detail' task.id %}" class="task-title">{{ task.title }}</a>
+                    {% if task.description %}
+                    <p class="task-description">{{ task.description|truncatewords:15 }}</p>
+                    {% endif %}
+                    <div class="task-meta">
+                        {% if task.due_time %}
+                        <span class="task-time">
+                            <i class="ri-time-line"></i>
+                            {{ task.due_time|time:"H:i" }}
+                        </span>
+                        {% endif %}
+                        {% if task.project %}
+                        <span class="task-project" style="color: {{ task.project.color }}">{{ task.project.name }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="task-priority priority-{% if task.priority == 1 %}low{% elif task.priority == 2 %}medium{% elif task.priority == 3 %}high{% else %}urgent{% endif %}"></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="ri-sun-line"></i>
+            </div>
+            <h3 class="empty-state-title">На сегодня задач нет</h3>
+            <p class="empty-state-text">Отличный день чтобы отдохнуть или добавить новые задачи</p>
+            <button class="btn btn-primary" onclick="openTaskModal()">
+                <i class="ri-add-line"></i>
+                Добавить задачу
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

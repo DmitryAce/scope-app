@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="form-page" style="max-width: 700px;">
+    <h1 class="page-title" style="margin-bottom: 24px;">
+        {% if task %}Редактировать задачу{% else %}Новая задача{% endif %}
+    </h1>
+    
+    <div class="form-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px;">
+        <form method="POST" action="{% if task %}{% url 'scope:task_edit' task.id %}{% else %}{% url 'scope:task_create' %}{% endif %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label">Название задачи</label>
+                <input type="text" 
+                       name="title" 
+                       class="form-input form-input-lg" 
+                       placeholder="Что нужно сделать?"
+                       value="{{ task.title|default:'' }}"
+                       required 
+                       autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea name="description" 
+                          class="form-input" 
+                          placeholder="Добавьте подробности задачи..."
+                          rows="4">{{ task.description|default:'' }}</textarea>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Проект</label>
+                    <select name="project" class="form-select">
+                        <option value="">Без проекта</option>
+                        {% for project in projects %}
+                        <option value="{{ project.id }}" {% if task.project_id == project.id %}selected{% endif %}>
+                            {{ project.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Приоритет</label>
+                    <select name="priority" class="form-select">
+                        <option value="1" {% if task.priority == 1 %}selected{% endif %}>🟢 Низкий</option>
+                        <option value="2" {% if task.priority == 2 or not task %}selected{% endif %}>🔵 Средний</option>
+                        <option value="3" {% if task.priority == 3 %}selected{% endif %}>🟠 Высокий</option>
+                        <option value="4" {% if task.priority == 4 %}selected{% endif %}>🔴 Срочный</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Дата выполнения</label>
+                    <input type="date" 
+                           name="due_date" 
+                           class="form-input"
+                           value="{{ task.due_date|date:'Y-m-d'|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Время</label>
+                    <input type="time" 
+                           name="due_time" 
+                           class="form-input"
+                           value="{{ task.due_time|time:'H:i'|default:'' }}">
+                </div>
+            </div>
+            
+            {% if tags %}
+            <div class="form-group">
+                <label class="form-label">Теги</label>
+                <div class="tags-select" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    {% for tag in tags %}
+                    <label class="tag-checkbox" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-tertiary); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s ease;">
+                        <input type="checkbox" 
+                               name="tags" 
+                               value="{{ tag.id }}"
+                               {% if task and tag in task.tags.all %}checked{% endif %}
+                               style="display: none;">
+                        <span class="tag-dot" style="background: {{ tag.color }}"></span>
+                        <span>{{ tag.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="form-actions" style="display: flex; gap: 12px; margin-top: 24px;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="ri-check-line"></i>
+                    {% if task %}Сохранить изменения{% else %}Создать задачу{% endif %}
+                </button>
+                <a href="{% if task %}{% url 'scope:task_detail' task.id %}{% else %}{% url 'scope:dashboard' %}{% endif %}" class="btn btn-ghost">
+                    Отмена
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.tag-checkbox:has(input:checked) {
+    background: var(--accent-primary) !important;
+    color: white;
+}
+</style>
+{% endblock %}
+

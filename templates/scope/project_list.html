@@ -1,0 +1,310 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="projects-view">
+    <div class="projects-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+        <div class="projects-stats">
+            <span class="stat-item">{{ project_list|length }} активных</span>
+            {% if archived_projects %}
+            <span class="stat-item stat-muted">{{ archived_projects|length }} в архиве</span>
+            {% endif %}
+        </div>
+        <button class="btn btn-primary" onclick="openProjectModal()">
+            <i class="ri-add-line"></i>
+            Новый проект
+        </button>
+    </div>
+    
+    <!-- Активные проекты -->
+    <div class="task-section">
+        <div class="task-section-header">
+            <h2 class="task-section-title">
+                <i class="ri-folder-3-line"></i>
+                Активные проекты
+            </h2>
+            <span class="task-section-count">{{ project_list|length }}</span>
+        </div>
+        
+        {% if project_list %}
+        <div class="projects-list">
+            {% for project in project_list %}
+            <div class="project-list-item" data-id="{{ project.id }}" style="--project-color: {{ project.color }}">
+                <div class="project-list-info">
+                    <a href="{% url 'scope:project_detail' project.id %}" class="project-list-link">
+                        <span class="project-dot-lg" style="background-color: {{ project.color }}"></span>
+                        <div class="project-list-text">
+                            <span class="project-list-name">{{ project.name }}</span>
+                            {% if project.description %}
+                            <span class="project-list-desc">{{ project.description|truncatewords:10 }}</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                </div>
+                <div class="project-list-meta">
+                    <span class="project-list-stats">
+                        <span class="stat-active">{{ project.task_count }}</span> /
+                        <span class="stat-done">{{ project.completed_task_count }}</span>
+                    </span>
+                    <div class="project-list-actions">
+                        <a href="{% url 'scope:project_edit' project.id %}" class="btn-icon" title="Редактировать">
+                            <i class="ri-edit-line"></i>
+                        </a>
+                        <button class="btn-icon" onclick="archiveProject({{ project.id }})" title="В архив">
+                            <i class="ri-archive-line"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding: 40px;">
+            <div class="empty-state-icon" style="font-size: 48px;">
+                <i class="ri-folder-add-line"></i>
+            </div>
+            <h3 class="empty-state-title">Нет активных проектов</h3>
+            <p class="empty-state-text">Создайте проект для организации задач</p>
+            <button class="btn btn-primary" onclick="openProjectModal()">
+                <i class="ri-add-line"></i>
+                Создать проект
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Архив -->
+    <div class="task-section" style="margin-top: 32px;">
+        <div class="task-section-header">
+            <h2 class="task-section-title">
+                <i class="ri-archive-line"></i>
+                Архив
+            </h2>
+            {% if archived_projects %}
+            <span class="task-section-count">{{ archived_projects|length }}</span>
+            {% endif %}
+        </div>
+        
+        {% if archived_projects %}
+        <div class="projects-list projects-list-archived">
+            {% for project in archived_projects %}
+            <div class="project-list-item archived" data-id="{{ project.id }}" style="--project-color: {{ project.color }}">
+                <div class="project-list-info">
+                    <a href="{% url 'scope:project_detail' project.id %}" class="project-list-link">
+                        <span class="project-dot-lg" style="background-color: {{ project.color }}"></span>
+                        <div class="project-list-text">
+                            <span class="project-list-name">{{ project.name }}</span>
+                        </div>
+                    </a>
+                </div>
+                <div class="project-list-meta">
+                    <span class="project-list-stats">
+                        {{ project.task_count }} задач
+                    </span>
+                    <div class="project-list-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="restoreProject({{ project.id }})" title="Восстановить">
+                            <i class="ri-inbox-unarchive-line"></i>
+                            Восстановить
+                        </button>
+                        <button class="btn-icon" onclick="deleteProjectPermanent({{ project.id }})" title="Удалить" style="color: var(--priority-urgent);">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-hint">Архивированные проекты появятся здесь</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.projects-stats {
+    display: flex;
+    gap: 16px;
+}
+
+.stat-item {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.stat-muted {
+    color: var(--text-muted);
+}
+
+.projects-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.project-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--project-color);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.project-list-item:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--project-color);
+}
+
+.project-list-item.archived {
+    opacity: 0.7;
+    border-left-color: var(--border-color);
+}
+
+.project-list-item.archived:hover {
+    opacity: 1;
+}
+
+.project-list-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.project-list-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+
+.project-dot-lg {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.project-list-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.project-list-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.project-list-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-list-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.project-list-stats {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.project-list-stats .stat-active {
+    color: var(--text-secondary);
+}
+
+.project-list-stats .stat-done {
+    color: var(--priority-low);
+}
+
+.project-list-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.project-list-item:hover .project-list-actions {
+    opacity: 1;
+}
+
+.empty-hint {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+</style>
+
+<script>
+function archiveProject(projectId) {
+    fetch(`/projects/${projectId}/edit/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: 'is_archived=true',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+function restoreProject(projectId) {
+    fetch(`/projects/${projectId}/restore/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+function deleteProjectPermanent(projectId) {
+    if (!confirm('Удалить проект навсегда? Все задачи проекта также будут удалены.')) return;
+    
+    fetch(`/projects/${projectId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const item = document.querySelector(`.project-list-item[data-id="${projectId}"]`);
+            if (item) item.remove();
+        }
+    })
+    .catch(error => console.error('Error:', error));
+}
+</script>
+{% endblock %}

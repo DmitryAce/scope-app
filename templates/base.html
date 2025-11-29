@@ -1,0 +1,263 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
+    <title>{% block title %}{{ page_title|default:'Scope' }}{% endblock %} | Scope</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.0.0/fonts/remixicon.css">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Боковая панель -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="{% url 'scope:dashboard' %}" class="logo">
+                    <span class="logo-icon">S</span>
+                    <span class="logo-text"><span style="margin-left: -7px;">scope</span></span>
+                </a>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <a href="{% url 'scope:dashboard' %}" class="nav-item {% if current_page == 'dashboard' %}active{% endif %}">
+                        <i class="ri-inbox-line"></i>
+                        <span>Все задачи</span>
+                        {% if all_count %}<span class="badge">{{ all_count }}</span>{% endif %}
+                    </a>
+                    <a href="{% url 'scope:today' %}" class="nav-item {% if current_page == 'today' %}active{% endif %}">
+                        <i class="ri-calendar-todo-line"></i>
+                        <span>Сегодня</span>
+                        {% if today_count %}<span class="badge">{{ today_count }}</span>{% endif %}
+                    </a>
+                    <a href="{% url 'scope:calendar' %}" class="nav-item {% if current_page == 'calendar' %}active{% endif %}">
+                        <i class="ri-calendar-line"></i>
+                        <span>Календарь</span>
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-header">
+                        <a href="{% url 'scope:project_list' %}" class="nav-section-link {% if current_page == 'projects' %}active{% endif %}">
+                            <i class="ri-folder-line"></i>
+                            Проекты
+                        </a>
+                        <button class="btn-icon" onclick="openProjectModal()" title="Новый проект">
+                            <i class="ri-add-line"></i>
+                        </button>
+                    </div>
+                    {% for project in projects %}
+                    <a href="{% url 'scope:project_detail' project.id %}" 
+                       class="nav-item {% if current_page == 'project_'|add:project.id|stringformat:'s' %}active{% endif %}">
+                        <span class="project-dot" style="background-color: {{ project.color }}"></span>
+                        <span>{{ project.name }}</span>
+                        {% if project.task_count %}<span class="badge">{{ project.task_count }}</span>{% endif %}
+                    </a>
+                    {% empty %}
+                    <a href="{% url 'scope:project_list' %}" class="nav-empty-link">Создать проект</a>
+                    {% endfor %}
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-header">
+                        <span>Теги</span>
+                        <button class="btn-icon" onclick="openTagModal()" title="Новый тег">
+                            <i class="ri-add-line"></i>
+                        </button>
+                    </div>
+                    {% for tag in tags %}
+                    <a href="{% url 'scope:dashboard' %}?tag={{ tag.id }}" class="nav-item nav-tag">
+                        <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
+                        <span>{{ tag.name }}</span>
+                    </a>
+                    {% empty %}
+                    <p class="nav-empty">Нет тегов</p>
+                    {% endfor %}
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <a href="{% url 'admin:index' %}" class="nav-item">
+                    <i class="ri-settings-3-line"></i>
+                    <span>Настройки</span>
+                </a>
+            </div>
+        </aside>
+        
+        <!-- Основной контент -->
+        <main class="main-content">
+            <header class="content-header">
+                <div class="header-left">
+                    <h1 class="page-title">{{ page_title }}</h1>
+                </div>
+                <div class="header-right">
+                    <div class="search-box">
+                        <i class="ri-search-line"></i>
+                        <input type="text" placeholder="Поиск задач..." id="searchInput">
+                    </div>
+                    <button class="btn btn-primary" onclick="openTaskModal()">
+                        <i class="ri-add-line"></i>
+                        <span>Новая задача</span>
+                    </button>
+                </div>
+            </header>
+            
+            <div class="content-body">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    
+    <!-- Модальное окно создания задачи -->
+    <div class="modal" id="taskModal">
+        <div class="modal-overlay" onclick="closeTaskModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Новая задача</h2>
+                <button class="btn-icon" onclick="closeTaskModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <form id="taskForm" method="POST" action="{% url 'scope:task_create' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="form-group">
+                        <input type="text" name="title" class="form-input form-input-lg" placeholder="Название задачи" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <textarea name="description" class="form-input" placeholder="Описание (опционально)" rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Проект</label>
+                            <select name="project" class="form-select">
+                                <option value="">Без проекта</option>
+                                {% for project in projects %}
+                                <option value="{{ project.id }}">{{ project.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Приоритет</label>
+                            <select name="priority" class="form-select">
+                                <option value="1">Низкий</option>
+                                <option value="2" selected>Средний</option>
+                                <option value="3">Высокий</option>
+                                <option value="4">Срочный</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Дата</label>
+                            <input type="date" name="due_date" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Время</label>
+                            <input type="time" name="due_time" class="form-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" onclick="closeTaskModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать задачу</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Модальное окно создания проекта -->
+    <div class="modal" id="projectModal">
+        <div class="modal-overlay" onclick="closeProjectModal()"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Новый проект</h2>
+                <button class="btn-icon" onclick="closeProjectModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <form id="projectForm" method="POST" action="{% url 'scope:project_create' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="form-group">
+                        <input type="text" name="name" class="form-input" placeholder="Название проекта" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Цвет</label>
+                        <div class="color-picker-group">
+                            <div class="color-picker">
+                                <input type="color" name="color" id="projectColorPicker" value="#7C3AED" class="color-input" onchange="syncColorHex(this, 'projectColorHex')">
+                                <input type="text" id="projectColorHex" class="color-hex-input" value="#7C3AED" placeholder="#7C3AED" maxlength="7" oninput="syncHexColor(this, 'projectColorPicker')">
+                            </div>
+                            <div class="color-presets">
+                                <button type="button" class="color-preset" style="background: #7C3AED" data-color="#7C3AED" onclick="setColor('#7C3AED', 'projectColorPicker', 'projectColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #8B2942" data-color="#8B2942" onclick="setColor('#8B2942', 'projectColorPicker', 'projectColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #2563EB" data-color="#2563EB" onclick="setColor('#2563EB', 'projectColorPicker', 'projectColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #059669" data-color="#059669" onclick="setColor('#059669', 'projectColorPicker', 'projectColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #D97706" data-color="#D97706" onclick="setColor('#D97706', 'projectColorPicker', 'projectColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #DC2626" data-color="#DC2626" onclick="setColor('#DC2626', 'projectColorPicker', 'projectColorHex')"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" onclick="closeProjectModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Модальное окно создания тега -->
+    <div class="modal" id="tagModal">
+        <div class="modal-overlay" onclick="closeTagModal()"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Новый тег</h2>
+                <button class="btn-icon" onclick="closeTagModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <form id="tagForm" method="POST" action="{% url 'scope:tag_create' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="form-group">
+                        <input type="text" name="name" class="form-input" placeholder="Название тега" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Цвет</label>
+                        <div class="color-picker-group">
+                            <div class="color-picker">
+                                <input type="color" name="color" id="tagColorPicker" value="#7C3AED" class="color-input" onchange="syncColorHex(this, 'tagColorHex')">
+                                <input type="text" id="tagColorHex" class="color-hex-input" value="#7C3AED" placeholder="#7C3AED" maxlength="7" oninput="syncHexColor(this, 'tagColorPicker')">
+                            </div>
+                            <div class="color-presets">
+                                <button type="button" class="color-preset" style="background: #7C3AED" onclick="setColor('#7C3AED', 'tagColorPicker', 'tagColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #8B2942" onclick="setColor('#8B2942', 'tagColorPicker', 'tagColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #2563EB" onclick="setColor('#2563EB', 'tagColorPicker', 'tagColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #059669" onclick="setColor('#059669', 'tagColorPicker', 'tagColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #F59E0B" onclick="setColor('#F59E0B', 'tagColorPicker', 'tagColorHex')"></button>
+                                <button type="button" class="color-preset" style="background: #EC4899" onclick="setColor('#EC4899', 'tagColorPicker', 'tagColorHex')"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" onclick="closeTagModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{% static 'js/app.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+
