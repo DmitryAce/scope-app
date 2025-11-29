@@ -10,16 +10,17 @@ import json
 from .models import Task, Project, Tag, ChecklistItem, TaskNote, TaskLink, TaskAttachment
 
 
-def get_sidebar_context():
-    """Общий контекст для боковой панели"""
+def get_sidebar_context(user):
+    """Общий контекст для боковой панели - фильтрация по пользователю"""
     return {
-        'projects': Project.objects.filter(is_archived=False),
-        'tags': Tag.objects.all(),
+        'projects': Project.objects.filter(user=user, is_archived=False),
+        'tags': Tag.objects.filter(user=user),
         'today_count': Task.objects.filter(
+            user=user,
             due_date=timezone.now().date(),
             is_completed=False
         ).count(),
-        'all_count': Task.objects.filter(is_completed=False).count(),
+        'all_count': Task.objects.filter(user=user, is_completed=False).count(),
     }
 
 
@@ -30,8 +31,8 @@ def get_sidebar_context():
 @login_required
 def dashboard(request):
     """Главная страница - все задачи"""
-    tasks = Task.objects.filter(is_completed=False)
-    completed_tasks = Task.objects.filter(is_completed=True)[:10]
+    tasks = Task.objects.filter(user=request.user, is_completed=False)
+    completed_tasks = Task.objects.filter(user=request.user, is_completed=True)[:10]
     
     # Фильтрация
     project_id = request.GET.get('project')
@@ -53,7 +54,7 @@ def dashboard(request):
         'completed_tasks': completed_tasks,
         'page_title': 'Все задачи',
         'current_page': 'dashboard',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/dashboard.html', context)
 
@@ -62,8 +63,8 @@ def dashboard(request):
 def today_view(request):
     """Задачи на сегодня"""
     today = timezone.now().date()
-    tasks = Task.objects.filter(due_date=today, is_completed=False)
-    overdue_tasks = Task.objects.filter(due_date__lt=today, is_completed=False)
+    tasks = Task.objects.filter(user=request.user, due_date=today, is_completed=False)
+    overdue_tasks = Task.objects.filter(user=request.user, due_date__lt=today, is_completed=False)
     
     context = {
         'tasks': tasks,
@@ -71,7 +72,7 @@ def today_view(request):
         'page_title': 'Сегодня',
         'current_page': 'today',
         'today': today,
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/today.html', context)
 
@@ -82,7 +83,7 @@ def calendar_view(request):
     context = {
         'page_title': 'Календарь',
         'current_page': 'calendar',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/calendar.html', context)
 
@@ -94,15 +95,15 @@ def calendar_view(request):
 @login_required
 def project_list(request):
     """Список проектов"""
-    projects = Project.objects.filter(is_archived=False)
-    archived_projects = Project.objects.filter(is_archived=True)
+    projects = Project.objects.filter(user=request.user, is_archived=False)
+    archived_projects = Project.objects.filter(user=request.user, is_archived=True)
     
     context = {
         'page_title': 'Проекты',
         'current_page': 'projects',
         'project_list': projects,
         'archived_projects': archived_projects,
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/project_list.html', context)
 
@@ -110,7 +111,7 @@ def project_list(request):
 @login_required
 def project_detail(request, pk):
     """Детали проекта"""
-    project = get_object_or_404(Project, pk=pk)
+    project = get_object_or_404(Project, pk=pk, user=request.user)
     tasks = project.tasks.filter(is_completed=False)
     completed_tasks = project.tasks.filter(is_completed=True)
     
@@ -120,7 +121,7 @@ def project_detail(request, pk):
         'completed_tasks': completed_tasks,
         'page_title': project.name,
         'current_page': f'project_{pk}',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/project_detail.html', context)
 
@@ -139,6 +140,7 @@ def project_create(request):
             description=description,
             color=color,
             icon=icon,
+            user=request.user,
         )
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -148,7 +150,7 @@ def project_create(request):
     context = {
         'page_title': 'Новый проект',
         'current_page': 'projects',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/project_form.html', context)
 
@@ -156,7 +158,7 @@ def project_create(request):
 @login_required
 def project_edit(request, pk):
     """Редактирование проекта"""
-    project = get_object_or_404(Project, pk=pk)
+    project = get_object_or_404(Project, pk=pk, user=request.user)
     
     if request.method == 'POST':
         # Обновляем только переданные поля
@@ -180,7 +182,7 @@ def project_edit(request, pk):
         'project': project,
         'page_title': f'Редактировать {project.name}',
         'current_page': f'project_{pk}',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/project_form.html', context)
 
@@ -189,7 +191,7 @@ def project_edit(request, pk):
 @require_POST
 def project_delete(request, pk):
     """Удаление проекта"""
-    project = get_object_or_404(Project, pk=pk)
+    project = get_object_or_404(Project, pk=pk, user=request.user)
     project.delete()
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -201,7 +203,7 @@ def project_delete(request, pk):
 @require_POST
 def project_restore(request, pk):
     """Восстановление проекта из архива"""
-    project = get_object_or_404(Project, pk=pk)
+    project = get_object_or_404(Project, pk=pk, user=request.user)
     project.is_archived = False
     project.save()
     
@@ -233,6 +235,7 @@ def task_create(request):
             priority=int(priority),
             due_date=due_date if due_date else None,
             due_time=due_time if due_time else None,
+            user=request.user,
         )
         
         if tag_ids:
@@ -252,7 +255,7 @@ def task_create(request):
     context = {
         'page_title': 'Новая задача',
         'current_page': 'dashboard',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/task_form.html', context)
 
@@ -260,13 +263,13 @@ def task_create(request):
 @login_required
 def task_detail(request, pk):
     """Детальная страница задачи"""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task, pk=pk, user=request.user)
     
     context = {
         'task': task,
         'page_title': task.title,
         'current_page': 'dashboard',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/task_detail.html', context)
 
@@ -274,7 +277,7 @@ def task_detail(request, pk):
 @login_required
 def task_edit(request, pk):
     """Редактирование задачи"""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task, pk=pk, user=request.user)
     
     if request.method == 'POST':
         task.title = request.POST.get('title', task.title)
@@ -303,7 +306,7 @@ def task_edit(request, pk):
         'task': task,
         'page_title': f'Редактировать задачу',
         'current_page': 'dashboard',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/task_form.html', context)
 
@@ -312,7 +315,7 @@ def task_edit(request, pk):
 @require_POST
 def task_delete(request, pk):
     """Удаление задачи"""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task, pk=pk, user=request.user)
     task.delete()
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -324,7 +327,7 @@ def task_delete(request, pk):
 @require_POST
 def task_toggle(request, pk):
     """Переключение статуса задачи"""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task, pk=pk, user=request.user)
     task.is_completed = not task.is_completed
     task.save()
     
@@ -338,7 +341,7 @@ def task_toggle(request, pk):
 @require_POST
 def task_update_inline(request, pk):
     """Инлайн обновление задачи (название, приоритет)"""
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task, pk=pk, user=request.user)
     
     # Обновляем только переданные поля
     title = request.POST.get('title')
@@ -371,7 +374,7 @@ def task_update_inline(request, pk):
 @require_POST
 def checklist_add(request, task_pk):
     """Добавление элемента чек-листа"""
-    task = get_object_or_404(Task, pk=task_pk)
+    task = get_object_or_404(Task, pk=task_pk, user=request.user)
     text = request.POST.get('text')
     
     if text:
@@ -388,7 +391,7 @@ def checklist_add(request, task_pk):
 @require_POST
 def checklist_toggle(request, pk):
     """Переключение статуса элемента чек-листа"""
-    item = get_object_or_404(ChecklistItem, pk=pk)
+    item = get_object_or_404(ChecklistItem, pk=pk, task__user=request.user)
     item.is_completed = not item.is_completed
     item.save()
     
@@ -404,7 +407,7 @@ def checklist_toggle(request, pk):
 @require_POST
 def checklist_delete(request, pk):
     """Удаление элемента чек-листа"""
-    item = get_object_or_404(ChecklistItem, pk=pk)
+    item = get_object_or_404(ChecklistItem, pk=pk, task__user=request.user)
     task = item.task
     item.delete()
     
@@ -423,7 +426,7 @@ def checklist_delete(request, pk):
 @require_POST
 def link_add(request, task_pk):
     """Добавление ссылки к задаче"""
-    task = get_object_or_404(Task, pk=task_pk)
+    task = get_object_or_404(Task, pk=task_pk, user=request.user)
     url = request.POST.get('url', '').strip()
     title = request.POST.get('title', '').strip()
     
@@ -449,7 +452,7 @@ def link_add(request, task_pk):
 @require_POST
 def link_delete(request, pk):
     """Удаление ссылки"""
-    link = get_object_or_404(TaskLink, pk=pk)
+    link = get_object_or_404(TaskLink, pk=pk, task__user=request.user)
     link.delete()
     return JsonResponse({'success': True})
 
@@ -462,7 +465,7 @@ def link_delete(request, pk):
 @require_POST
 def attachment_add(request, task_pk):
     """Добавление вложения к задаче"""
-    task = get_object_or_404(Task, pk=task_pk)
+    task = get_object_or_404(Task, pk=task_pk, user=request.user)
     
     if 'file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'Файл не выбран'})
@@ -495,7 +498,7 @@ def attachment_add(request, task_pk):
 @require_POST
 def attachment_delete(request, pk):
     """Удаление вложения"""
-    attachment = get_object_or_404(TaskAttachment, pk=pk)
+    attachment = get_object_or_404(TaskAttachment, pk=pk, task__user=request.user)
     # Удаляем файл
     if attachment.file:
         attachment.file.delete(save=False)
@@ -510,13 +513,13 @@ def attachment_delete(request, pk):
 @login_required
 def tag_list(request):
     """Список тегов"""
-    tags = Tag.objects.all()
+    tags = Tag.objects.filter(user=request.user)
     
     context = {
         'tag_list': tags,
         'page_title': 'Теги',
         'current_page': 'tags',
-        **get_sidebar_context(),
+        **get_sidebar_context(request.user),
     }
     return render(request, 'scope/tag_list.html', context)
 
@@ -528,20 +531,20 @@ def tag_create(request):
         name = request.POST.get('name')
         color = request.POST.get('color', '#7C3AED')
         
-        tag = Tag.objects.create(name=name, color=color)
+        tag = Tag.objects.create(name=name, color=color, user=request.user)
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'success': True, 'id': tag.id, 'name': tag.name, 'color': tag.color})
         return redirect('scope:tag_list')
     
-    return render(request, 'scope/tag_form.html', get_sidebar_context())
+    return render(request, 'scope/tag_form.html', get_sidebar_context(request.user))
 
 
 @login_required
 @require_POST
 def tag_delete(request, pk):
     """Удаление тега"""
-    tag = get_object_or_404(Tag, pk=pk)
+    tag = get_object_or_404(Tag, pk=pk, user=request.user)
     tag.delete()
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -557,7 +560,7 @@ def tag_delete(request, pk):
 @require_GET
 def api_tasks(request):
     """API для получения задач"""
-    tasks = Task.objects.all()
+    tasks = Task.objects.filter(user=request.user)
     
     project_id = request.GET.get('project')
     completed = request.GET.get('completed')
@@ -587,7 +590,7 @@ def api_calendar_events(request):
     start = request.GET.get('start')
     end = request.GET.get('end')
     
-    tasks = Task.objects.filter(due_date__isnull=False).select_related('project')
+    tasks = Task.objects.filter(user=request.user, due_date__isnull=False).select_related('project')
     
     if start:
         tasks = tasks.filter(due_date__gte=start)
