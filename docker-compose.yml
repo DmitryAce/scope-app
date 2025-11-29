@@ -55,17 +55,7 @@ services:
       - media_volume:/app/media:ro
     depends_on:
       - web
-    command: >
-      /bin/sh -c "
-        if [ ! -f /etc/nginx/ssl/cert.pem ]; then
-          apk add --no-cache openssl &&
-          openssl req -x509 -nodes -days 3650 -newkey rsa:2048
-            -keyout /etc/nginx/ssl/key.pem
-            -out /etc/nginx/ssl/cert.pem
-            -subj '/CN=scope.drxeno.netcraze.pro' 2>/dev/null;
-        fi;
-        nginx -g 'daemon off;'
-      "
+    command: ["/bin/sh", "-c", "if [ ! -f /etc/nginx/ssl/cert.pem ]; then apk add --no-cache openssl && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /etc/nginx/ssl/key.pem -out /etc/nginx/ssl/cert.pem -subj '/CN=localhost'; fi && nginx -g 'daemon off;'"]
 
 volumes:
   postgres_data:
