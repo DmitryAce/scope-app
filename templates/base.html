@@ -83,10 +83,20 @@
             </nav>
             
             <div class="sidebar-footer">
-                <a href="{% url 'admin:index' %}" class="nav-item">
-                    <i class="ri-settings-3-line"></i>
-                    <span>Настройки</span>
-                </a>
+                <div class="user-info">
+                    <div class="user-avatar">{{ user.username|slice:":1"|upper }}</div>
+                    <span class="user-name">{{ user.username }}</span>
+                </div>
+                <div class="footer-actions">
+                    <a href="{% url 'admin:index' %}" class="nav-item" title="Админка">
+                        <i class="ri-settings-3-line"></i>
+                        <span>Настройки</span>
+                    </a>
+                    <a href="{% url 'users:logout' %}" class="nav-item nav-logout" title="Выйти">
+                        <i class="ri-logout-box-r-line"></i>
+                        <span>Выйти</span>
+                    </a>
+                </div>
             </div>
         </aside>
         

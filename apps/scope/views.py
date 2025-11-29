@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
+from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Q
 from datetime import datetime, timedelta
@@ -26,6 +27,7 @@ def get_sidebar_context():
 # Главные страницы
 # ==================
 
+@login_required
 def dashboard(request):
     """Главная страница - все задачи"""
     tasks = Task.objects.filter(is_completed=False)
@@ -56,6 +58,7 @@ def dashboard(request):
     return render(request, 'scope/dashboard.html', context)
 
 
+@login_required
 def today_view(request):
     """Задачи на сегодня"""
     today = timezone.now().date()
@@ -73,6 +76,7 @@ def today_view(request):
     return render(request, 'scope/today.html', context)
 
 
+@login_required
 def calendar_view(request):
     """Календарный вид"""
     context = {
@@ -87,6 +91,7 @@ def calendar_view(request):
 # Проекты
 # ==================
 
+@login_required
 def project_list(request):
     """Список проектов"""
     projects = Project.objects.filter(is_archived=False)
@@ -102,6 +107,7 @@ def project_list(request):
     return render(request, 'scope/project_list.html', context)
 
 
+@login_required
 def project_detail(request, pk):
     """Детали проекта"""
     project = get_object_or_404(Project, pk=pk)
@@ -119,6 +125,7 @@ def project_detail(request, pk):
     return render(request, 'scope/project_detail.html', context)
 
 
+@login_required
 def project_create(request):
     """Создание проекта"""
     if request.method == 'POST':
@@ -146,6 +153,7 @@ def project_create(request):
     return render(request, 'scope/project_form.html', context)
 
 
+@login_required
 def project_edit(request, pk):
     """Редактирование проекта"""
     project = get_object_or_404(Project, pk=pk)
@@ -177,6 +185,7 @@ def project_edit(request, pk):
     return render(request, 'scope/project_form.html', context)
 
 
+@login_required
 @require_POST
 def project_delete(request, pk):
     """Удаление проекта"""
@@ -188,6 +197,7 @@ def project_delete(request, pk):
     return redirect('scope:project_list')
 
 
+@login_required
 @require_POST
 def project_restore(request, pk):
     """Восстановление проекта из архива"""
@@ -204,6 +214,7 @@ def project_restore(request, pk):
 # Задачи
 # ==================
 
+@login_required
 def task_create(request):
     """Создание задачи"""
     if request.method == 'POST':
@@ -246,6 +257,7 @@ def task_create(request):
     return render(request, 'scope/task_form.html', context)
 
 
+@login_required
 def task_detail(request, pk):
     """Детальная страница задачи"""
     task = get_object_or_404(Task, pk=pk)
@@ -259,6 +271,7 @@ def task_detail(request, pk):
     return render(request, 'scope/task_detail.html', context)
 
 
+@login_required
 def task_edit(request, pk):
     """Редактирование задачи"""
     task = get_object_or_404(Task, pk=pk)
@@ -295,6 +308,7 @@ def task_edit(request, pk):
     return render(request, 'scope/task_form.html', context)
 
 
+@login_required
 @require_POST
 def task_delete(request, pk):
     """Удаление задачи"""
@@ -306,6 +320,7 @@ def task_delete(request, pk):
     return redirect('scope:dashboard')
 
 
+@login_required
 @require_POST
 def task_toggle(request, pk):
     """Переключение статуса задачи"""
@@ -319,6 +334,7 @@ def task_toggle(request, pk):
     })
 
 
+@login_required
 @require_POST
 def task_update_inline(request, pk):
     """Инлайн обновление задачи (название, приоритет)"""
@@ -351,6 +367,7 @@ def task_update_inline(request, pk):
 # Чек-листы
 # ==================
 
+@login_required
 @require_POST
 def checklist_add(request, task_pk):
     """Добавление элемента чек-листа"""
@@ -367,6 +384,7 @@ def checklist_add(request, task_pk):
     return JsonResponse({'success': False, 'error': 'Текст обязателен'})
 
 
+@login_required
 @require_POST
 def checklist_toggle(request, pk):
     """Переключение статуса элемента чек-листа"""
@@ -382,6 +400,7 @@ def checklist_toggle(request, pk):
     })
 
 
+@login_required
 @require_POST
 def checklist_delete(request, pk):
     """Удаление элемента чек-листа"""
@@ -400,6 +419,7 @@ def checklist_delete(request, pk):
 # Ссылки
 # ==================
 
+@login_required
 @require_POST
 def link_add(request, task_pk):
     """Добавление ссылки к задаче"""
@@ -425,6 +445,7 @@ def link_add(request, task_pk):
     })
 
 
+@login_required
 @require_POST
 def link_delete(request, pk):
     """Удаление ссылки"""
@@ -437,6 +458,7 @@ def link_delete(request, pk):
 # Вложения
 # ==================
 
+@login_required
 @require_POST
 def attachment_add(request, task_pk):
     """Добавление вложения к задаче"""
@@ -469,6 +491,7 @@ def attachment_add(request, task_pk):
     })
 
 
+@login_required
 @require_POST
 def attachment_delete(request, pk):
     """Удаление вложения"""
@@ -484,6 +507,7 @@ def attachment_delete(request, pk):
 # Теги
 # ==================
 
+@login_required
 def tag_list(request):
     """Список тегов"""
     tags = Tag.objects.all()
@@ -497,6 +521,7 @@ def tag_list(request):
     return render(request, 'scope/tag_list.html', context)
 
 
+@login_required
 def tag_create(request):
     """Создание тега"""
     if request.method == 'POST':
@@ -512,6 +537,7 @@ def tag_create(request):
     return render(request, 'scope/tag_form.html', get_sidebar_context())
 
 
+@login_required
 @require_POST
 def tag_delete(request, pk):
     """Удаление тега"""
@@ -527,6 +553,7 @@ def tag_delete(request, pk):
 # API
 # ==================
 
+@login_required
 @require_GET
 def api_tasks(request):
     """API для получения задач"""
@@ -553,6 +580,7 @@ def api_tasks(request):
     return JsonResponse({'tasks': data})
 
 
+@login_required
 @require_GET
 def api_calendar_events(request):
     """API для календаря"""
