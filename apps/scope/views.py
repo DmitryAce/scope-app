@@ -472,10 +472,10 @@ def attachment_add(request, task_pk):
     
     uploaded_file = request.FILES['file']
     
-    # Ограничение размера файла (10 МБ)
-    max_size = 10 * 1024 * 1024
+    # Ограничение размера файла (1 ГБ)
+    max_size = 1024 * 1024 * 1024  # 1 GB
     if uploaded_file.size > max_size:
-        return JsonResponse({'success': False, 'error': 'Файл слишком большой (макс. 10 МБ)'})
+        return JsonResponse({'success': False, 'error': 'Файл слишком большой (макс. 1 ГБ)'})
     
     attachment = TaskAttachment.objects.create(
         task=task,
