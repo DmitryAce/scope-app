@@ -140,6 +140,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# =====================
+# File Upload Settings (1GB limit)
+# =====================
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024  # 1GB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024  # 1GB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Allow many form fields
+
 # ===========================
 # Default Primary Key Setting
 # ===========================

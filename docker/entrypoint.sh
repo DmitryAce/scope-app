@@ -26,13 +26,16 @@ fi
 
 echo "✨ Scope is ready!"
 
-# Start Gunicorn
+# Start Gunicorn (with extended timeouts for large file uploads up to 1GB)
 exec gunicorn core.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers 3 \
     --threads 2 \
     --worker-class gthread \
     --worker-tmp-dir /dev/shm \
+    --timeout 600 \
+    --graceful-timeout 300 \
+    --keep-alive 5 \
     --access-logfile - \
     --error-logfile - \
     --capture-output \
