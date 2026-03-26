@@ -55,5 +55,6 @@ urlpatterns = [
     path('api/calendar-events/', views.api_calendar_events, name='api_calendar_events'),
     path('api/kanban-events/', views.api_kanban_events, name='api_kanban_events'),
     path('api/stats/', views.api_stats, name='api_stats'),
+    path('api/sidebar/', views.api_sidebar, name='api_sidebar'),
 ]
 

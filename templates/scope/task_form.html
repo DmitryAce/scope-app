@@ -44,12 +44,21 @@
                 
                 <div class="form-group">
                     <label class="form-label">Приоритет</label>
-                    <select name="priority" class="form-select">
-                        <option value="1" {% if task.priority == 1 %}selected{% endif %}>🟢 Низкий</option>
-                        <option value="2" {% if task.priority == 2 or not task %}selected{% endif %}>🔵 Средний</option>
-                        <option value="3" {% if task.priority == 3 %}selected{% endif %}>🟠 Высокий</option>
-                        <option value="4" {% if task.priority == 4 %}selected{% endif %}>🔴 Срочный</option>
-                    </select>
+                    <input type="hidden" name="priority" id="editPriorityInput" value="{{ task.priority|default:'2' }}">
+                    <div class="priority-selector-row">
+                        <button type="button" class="priority-btn {% if task.priority == 1 %}active{% endif %}" data-val="1" onclick="selectPriority(this, 'editPriorityInput')">
+                            <span class="priority-dot priority-low"></span><span>Низкий</span>
+                        </button>
+                        <button type="button" class="priority-btn {% if task.priority == 2 or not task %}active{% endif %}" data-val="2" onclick="selectPriority(this, 'editPriorityInput')">
+                            <span class="priority-dot priority-medium"></span><span>Средний</span>
+                        </button>
+                        <button type="button" class="priority-btn {% if task.priority == 3 %}active{% endif %}" data-val="3" onclick="selectPriority(this, 'editPriorityInput')">
+                            <span class="priority-dot priority-high"></span><span>Высокий</span>
+                        </button>
+                        <button type="button" class="priority-btn {% if task.priority == 4 %}active{% endif %}" data-val="4" onclick="selectPriority(this, 'editPriorityInput')">
+                            <span class="priority-dot priority-urgent"></span><span>Срочный</span>
+                        </button>
+                    </div>
                 </div>
             </div>
             

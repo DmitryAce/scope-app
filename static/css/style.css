@@ -1419,6 +1419,49 @@ textarea.form-input {
     gap: 16px;
 }
 
+/* Priority Selector (visual buttons) */
+.priority-selector-row {
+    display: flex;
+    gap: 6px;
+}
+
+.priority-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex: 1;
+    justify-content: center;
+}
+
+.priority-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+
+.priority-btn.active {
+    border-color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.15);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.priority-btn .priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 /* Color Picker */
 .color-picker-group {
     display: flex;

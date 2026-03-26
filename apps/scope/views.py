@@ -639,8 +639,11 @@ def api_calendar_events(request):
 def task_update_date(request, pk):
     """Обновление даты задачи (для drag-and-drop в канбане)"""
     task = get_object_or_404(Task, pk=pk, user=request.user)
-    due_date = request.POST.get('due_date')
-    task.due_date = due_date if due_date else None
+    due_date_str = request.POST.get('due_date', '').strip()
+    if due_date_str:
+        task.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+    else:
+        task.due_date = None
     task.save()
     return JsonResponse({
         'success': True,
@@ -726,6 +729,31 @@ def api_kanban_events(request):
         })
 
     return JsonResponse(events, safe=False)
+
+
+@login_required
+@require_GET
+def api_sidebar(request):
+    """API для обновления сайдбара — проекты, теги, счётчики"""
+    user = request.user
+    today = timezone.now().date()
+
+    projects = list(Project.objects.filter(user=user, is_archived=False).values(
+        'id', 'name', 'color'
+    ))
+    for p in projects:
+        p['task_count'] = Task.objects.filter(
+            project_id=p['id'], user=user, is_completed=False
+        ).count()
+
+    tags = list(Tag.objects.filter(user=user).values('id', 'name', 'color'))
+
+    return JsonResponse({
+        'projects': projects,
+        'tags': tags,
+        'today_count': Task.objects.filter(user=user, due_date=today, is_completed=False).count(),
+        'all_count': Task.objects.filter(user=user, is_completed=False).count(),
+    })
 
 
 def render_task_html(task):

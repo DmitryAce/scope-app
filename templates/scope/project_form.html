@@ -31,17 +31,20 @@
             
             <div class="form-group">
                 <label class="form-label">Цвет проекта</label>
-                <div class="color-picker">
-                    <input type="color" name="color" value="{{ project.color|default:'#7C3AED' }}" class="color-input">
+                <div class="color-picker-group">
+                    <div class="color-picker">
+                        <input type="color" name="color" id="editProjectColor" value="{{ project.color|default:'#7C3AED' }}" class="color-input" onchange="syncColorHex(this, 'editProjectHex')">
+                        <input type="text" id="editProjectHex" class="color-hex-input" value="{{ project.color|default:'#7C3AED' }}" maxlength="7" oninput="syncHexColor(this, 'editProjectColor')">
+                    </div>
                     <div class="color-presets">
-                        <button type="button" class="color-preset" style="background: #7C3AED" data-color="#7C3AED"></button>
-                        <button type="button" class="color-preset" style="background: #8B2942" data-color="#8B2942"></button>
-                        <button type="button" class="color-preset" style="background: #2563EB" data-color="#2563EB"></button>
-                        <button type="button" class="color-preset" style="background: #059669" data-color="#059669"></button>
-                        <button type="button" class="color-preset" style="background: #D97706" data-color="#D97706"></button>
-                        <button type="button" class="color-preset" style="background: #DC2626" data-color="#DC2626"></button>
-                        <button type="button" class="color-preset" style="background: #EC4899" data-color="#EC4899"></button>
-                        <button type="button" class="color-preset" style="background: #6366F1" data-color="#6366F1"></button>
+                        <button type="button" class="color-preset" style="background: #7C3AED" onclick="setColor('#7C3AED', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #8B2942" onclick="setColor('#8B2942', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #2563EB" onclick="setColor('#2563EB', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #059669" onclick="setColor('#059669', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #D97706" onclick="setColor('#D97706', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #DC2626" onclick="setColor('#DC2626', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #EC4899" onclick="setColor('#EC4899', 'editProjectColor', 'editProjectHex')"></button>
+                        <button type="button" class="color-preset" style="background: #6366F1" onclick="setColor('#6366F1', 'editProjectColor', 'editProjectHex')"></button>
                     </div>
                 </div>
             </div>

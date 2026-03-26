@@ -158,12 +158,21 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Приоритет</label>
-                            <select name="priority" class="form-select">
-                                <option value="1">Низкий</option>
-                                <option value="2" selected>Средний</option>
-                                <option value="3">Высокий</option>
-                                <option value="4">Срочный</option>
-                            </select>
+                            <input type="hidden" name="priority" id="taskPriorityInput" value="2">
+                            <div class="priority-selector-row">
+                                <button type="button" class="priority-btn" data-val="1" onclick="selectPriority(this, 'taskPriorityInput')" title="Низкий">
+                                    <span class="priority-dot priority-low"></span><span>Низкий</span>
+                                </button>
+                                <button type="button" class="priority-btn active" data-val="2" onclick="selectPriority(this, 'taskPriorityInput')" title="Средний">
+                                    <span class="priority-dot priority-medium"></span><span>Средний</span>
+                                </button>
+                                <button type="button" class="priority-btn" data-val="3" onclick="selectPriority(this, 'taskPriorityInput')" title="Высокий">
+                                    <span class="priority-dot priority-high"></span><span>Высокий</span>
+                                </button>
+                                <button type="button" class="priority-btn" data-val="4" onclick="selectPriority(this, 'taskPriorityInput')" title="Срочный">
+                                    <span class="priority-dot priority-urgent"></span><span>Срочный</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -269,6 +278,14 @@
         </div>
     </div>
 
+    <script>
+    function selectPriority(btn, inputId) {
+        const container = btn.closest('.priority-selector-row');
+        container.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(inputId).value = btn.dataset.val;
+    }
+    </script>
     <script src="{% static 'js/app.js' %}"></script>
     {% block extra_js %}{% endblock %}
 </body>
