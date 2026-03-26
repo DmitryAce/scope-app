@@ -75,6 +75,7 @@ class KanbanCalendar {
         try {
             const res = await fetch(`/api/kanban-events/?start=${start}&end=${end}`);
             this.events = await res.json();
+            this.events.forEach(e => { if (e.order == null) e.order = 0; });
         } catch (e) {
             this.events = [];
         }
@@ -128,10 +129,11 @@ class KanbanCalendar {
         const todayStr = this.getTodayStr();
         const container = document.getElementById('kanbanWeeks');
 
-        // Auto-expand week containing today
-        const todayWeekIdx = weeks.findIndex(w => w.days.some(d => d.dateStr === todayStr));
-        if (this.expandedWeeks.size === 0 && todayWeekIdx >= 0) {
-            this.expandedWeeks.add(todayWeekIdx);
+        // По умолчанию все недели раскрыты (после смены месяца expandedWeeks пустой — снова всё раскрываем)
+        if (this.expandedWeeks.size === 0) {
+            for (let i = 0; i < weeks.length; i++) {
+                this.expandedWeeks.add(i);
+            }
         }
 
         const dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -171,24 +173,32 @@ class KanbanCalendar {
                     <div class="kanban-days">`;
 
             week.days.forEach((day, dIdx) => {
-                const dayEvents = this.events.filter(e => e.start === day.dateStr);
+                const dayEvents = this.events
+                    .filter(e => e.start === day.dateStr)
+                    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || a.id - b.id);
                 const isPast = day.dateStr < todayStr && !day.isToday;
 
                 html += `
                     <div class="kanban-day ${day.isToday ? 'today' : ''} ${!day.isCurrentMonth ? 'other-month' : ''} ${isPast ? 'past' : ''}"
                          data-date="${day.dateStr}"
-                         ondragover="kanbanCalendar.onDragOver(event)"
-                         ondragleave="kanbanCalendar.onDragLeave(event)"
-                         ondrop="kanbanCalendar.onDrop(event, '${day.dateStr}')">
+                         ondragover="kanbanCalendar.onDragOverDay(event)"
+                         ondragleave="kanbanCalendar.onDragLeaveDay(event)"
+                         ondrop="kanbanCalendar.onDropDay(event, '${day.dateStr}')">
                         <div class="kanban-day-header">
                             <span class="kanban-day-name">${dayNames[dIdx]}</span>
                             <span class="kanban-day-num ${day.isToday ? 'today-num' : ''}">${day.date.getDate()}</span>
                         </div>
                         <div class="kanban-day-tasks">`;
 
-                dayEvents.forEach(task => {
-                    html += this.renderTask(task);
-                });
+                if (dayEvents.length === 0) {
+                    html += this.renderDropSlot(day.dateStr, '', true);
+                } else {
+                    dayEvents.forEach(task => {
+                        html += this.renderDropSlot(day.dateStr, String(task.id), false);
+                        html += this.renderTask(task);
+                    });
+                    html += this.renderDropSlot(day.dateStr, '', false);
+                }
 
                 html += `
                         </div>
@@ -207,6 +217,16 @@ class KanbanCalendar {
         container.innerHTML = html;
     }
 
+    renderDropSlot(dateStr, beforeId, isEmpty) {
+        const cls = isEmpty ? 'kanban-drop-slot kanban-drop-slot--empty' : 'kanban-drop-slot';
+        const bid = beforeId === '' ? '' : this.escapeHtml(beforeId);
+        return `
+            <div class="${cls}" data-date="${dateStr}" data-before-id="${bid}"
+                 ondragover="kanbanCalendar.onSlotDragOver(event)"
+                 ondragleave="kanbanCalendar.onSlotDragLeave(event)"
+                 ondrop="kanbanCalendar.onSlotDrop(event)"></div>`;
+    }
+
     renderTask(task) {
         const priorityColors = { low: 'var(--priority-low)', medium: 'var(--priority-medium)', high: 'var(--priority-high)', urgent: 'var(--priority-urgent)' };
         const color = priorityColors[task.priority_class] || 'var(--priority-medium)';
@@ -219,7 +239,7 @@ class KanbanCalendar {
                  ondragend="kanbanCalendar.onDragEnd(event)">
                 <div class="kanban-task-priority" style="background:${color}"></div>
                 <div class="kanban-task-body">
-                    <a href="${task.url}" class="kanban-task-title">${this.escapeHtml(task.title)}</a>
+                    <a href="${task.url}" class="kanban-task-title" draggable="false">${this.escapeHtml(task.title)}</a>
                     <div class="kanban-task-meta">
                         ${task.time ? `<span><i class="ri-time-line"></i>${task.time}</span>` : ''}
                         ${task.project ? `<span style="color:${task.projectColor || 'var(--accent-secondary)'}">${this.escapeHtml(task.project)}</span>` : ''}
@@ -235,56 +255,102 @@ class KanbanCalendar {
     onDragStart(e, taskId) {
         this.draggedTask = taskId;
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', taskId);
-        e.target.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', String(taskId));
+        e.currentTarget.classList.add('dragging');
     }
 
     onDragEnd(e) {
-        e.target.classList.remove('dragging');
+        e.currentTarget.classList.remove('dragging');
         document.querySelectorAll('.kanban-day.drag-over').forEach(d => d.classList.remove('drag-over'));
+        document.querySelectorAll('.kanban-drop-slot.drag-active').forEach(s => s.classList.remove('drag-active'));
     }
 
-    onDragOver(e) {
+    onDragOverDay(e) {
+        if (e.target.closest('.kanban-drop-slot')) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         const day = e.target.closest('.kanban-day');
         if (day) day.classList.add('drag-over');
     }
 
-    onDragLeave(e) {
+    onDragLeaveDay(e) {
         const day = e.target.closest('.kanban-day');
         if (day && !day.contains(e.relatedTarget)) {
             day.classList.remove('drag-over');
         }
     }
 
-    async onDrop(e, dateStr) {
+    onSlotDragOver(e) {
         e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-active');
+    }
+
+    onSlotDragLeave(e) {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            e.currentTarget.classList.remove('drag-active');
+        }
+    }
+
+    async onSlotDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('drag-active');
+        const slot = e.currentTarget;
+        const dateStr = slot.dataset.date;
+        const beforeRaw = slot.dataset.beforeId || '';
+        const day = slot.closest('.kanban-day');
+        if (day) day.classList.remove('drag-over');
+        await this.applyKanbanReorder(dateStr, beforeRaw);
+    }
+
+    async onDropDay(e, dateStr) {
+        if (e.target.closest('.kanban-drop-slot')) return;
+        if (e.target.closest('.kanban-task')) return;
+        e.preventDefault();
+        e.stopPropagation();
         const day = e.target.closest('.kanban-day');
         if (day) day.classList.remove('drag-over');
+        await this.applyKanbanReorder(dateStr, '');
+    }
 
+    mergeOrdersFromResponse(dateStr, orders) {
+        orders.forEach(({ id, order }) => {
+            const ev = this.events.find(x => x.id === id);
+            if (ev) {
+                ev.start = dateStr;
+                ev.order = order;
+            }
+        });
+    }
+
+    async applyKanbanReorder(dateStr, beforeId) {
         const taskId = this.draggedTask;
         if (!taskId) return;
+        if (beforeId !== '' && parseInt(beforeId, 10) === Number(taskId)) return;
 
-        // Optimistic: move task card in DOM
-        const taskEl = document.querySelector(`.kanban-task[data-task-id="${taskId}"]`);
-        const targetTasks = day?.querySelector('.kanban-day-tasks');
-        if (taskEl && targetTasks) {
-            targetTasks.appendChild(taskEl);
-            taskEl.style.animation = 'slideIn 0.3s ease';
-        }
+        const prev = this.events.find(ev => ev.id === taskId);
+        const prevDate = prev ? prev.start : null;
+
+        const body = new URLSearchParams({ due_date: dateStr });
+        if (beforeId) body.set('before_id', beforeId);
 
         try {
-            const data = await apiFetch(`/tasks/${taskId}/update-date/`, {
+            const data = await apiFetch(`/tasks/${taskId}/kanban-reorder/`, {
                 method: 'POST',
-                body: `due_date=${dateStr}`,
+                body: body.toString(),
             });
-            if (data.success) {
-                showToast('Задача перемещена');
-                // Update events cache
-                const evt = this.events.find(ev => ev.id === taskId);
-                if (evt) evt.start = dateStr;
+            if (data.success && data.orders) {
+                this.mergeOrdersFromResponse(data.due_date, data.orders);
+                this.render();
+                if (prevDate !== data.due_date) {
+                    showToast('Задача перемещена');
+                } else {
+                    showToast('Порядок обновлён', 'info', 1800);
+                }
             } else {
+                showToast('Не удалось сохранить', 'error');
                 this.reload();
             }
         } catch (err) {
@@ -314,7 +380,7 @@ class KanbanCalendar {
                 }
                 const evt = this.events.find(ev => ev.id === taskId);
                 if (evt) evt.completed = data.is_completed;
-                updateSidebarCounts();
+                refreshSidebar();
             }
         } catch (err) {
             showToast('Ошибка', 'error');

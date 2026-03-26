@@ -1110,8 +1110,36 @@ input, textarea, select {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-height: 30px;
+    gap: 2px;
+    min-height: 28px;
+}
+
+/* Вставка задачи между другими (drag-and-drop) */
+.kanban-drop-slot {
+    flex-shrink: 0;
+    height: 5px;
+    margin: 1px 2px;
+    border-radius: 3px;
+    background: transparent;
+    transition: background 0.12s ease, height 0.12s ease, box-shadow 0.12s ease;
+}
+
+.kanban-drop-slot.drag-active {
+    height: 7px;
+    background: rgba(124, 58, 237, 0.35);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.kanban-drop-slot--empty {
+    flex: 1;
+    min-height: 32px;
+    margin: 4px;
+    align-self: stretch;
+}
+
+.kanban-drop-slot--empty.drag-active {
+    min-height: 32px;
+    background: rgba(124, 58, 237, 0.15);
 }
 
 /* Task card in kanban */

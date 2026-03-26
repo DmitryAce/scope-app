@@ -3,7 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Max
 from datetime import datetime, timedelta, date
 import json
 
@@ -228,6 +228,11 @@ def task_create(request):
         due_time = request.POST.get('due_time')
         tag_ids = request.POST.getlist('tags')
         
+        order_val = 0
+        if due_date:
+            max_o = Task.objects.filter(user=request.user, due_date=due_date).aggregate(m=Max('order'))['m']
+            order_val = (max_o if max_o is not None else -1) + 1
+
         task = Task.objects.create(
             title=title,
             description=description,
@@ -236,6 +241,7 @@ def task_create(request):
             due_date=due_date if due_date else None,
             due_time=due_time if due_time else None,
             user=request.user,
+            order=order_val,
         )
         
         if tag_ids:
@@ -287,15 +293,24 @@ def task_edit(request, pk):
         project_id = request.POST.get('project')
         task.project_id = project_id if project_id else None
         
-        due_date = request.POST.get('due_date')
-        task.due_date = due_date if due_date else None
-        
+        due_date_raw = request.POST.get('due_date')
+        parsed_date = datetime.strptime(due_date_raw, '%Y-%m-%d').date() if due_date_raw else None
+        if parsed_date != task.due_date:
+            task.due_date = parsed_date
+            if parsed_date:
+                max_o = Task.objects.filter(
+                    user=request.user, due_date=parsed_date
+                ).exclude(pk=task.pk).aggregate(m=Max('order'))['m']
+                task.order = (max_o if max_o is not None else -1) + 1
+            else:
+                task.order = 0
+
         due_time = request.POST.get('due_time')
         task.due_time = due_time if due_time else None
-        
+
         tag_ids = request.POST.getlist('tags')
         task.tags.set(tag_ids)
-        
+
         task.save()
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -637,17 +652,73 @@ def api_calendar_events(request):
 @login_required
 @require_POST
 def task_update_date(request, pk):
-    """Обновление даты задачи (для drag-and-drop в канбане)"""
+    """Обновление даты задачи (для drag-and-drop в канбане) — в конец списка дня"""
     task = get_object_or_404(Task, pk=pk, user=request.user)
     due_date_str = request.POST.get('due_date', '').strip()
     if due_date_str:
         task.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+        siblings = Task.objects.filter(
+            user=request.user, due_date=task.due_date
+        ).exclude(pk=task.pk)
+        max_o = siblings.aggregate(m=Max('order'))['m']
+        task.order = (max_o if max_o is not None else -1) + 1
     else:
         task.due_date = None
+        task.order = 0
     task.save()
     return JsonResponse({
         'success': True,
         'due_date': task.due_date.isoformat() if task.due_date else None,
+        'order': task.order,
+    })
+
+
+@login_required
+@require_POST
+def task_kanban_reorder(request, pk):
+    """Порядок задачи в дне календаря: due_date + вставка перед before_id (пусто = в конец)"""
+    task = get_object_or_404(Task, pk=pk, user=request.user)
+    due_date_str = request.POST.get('due_date', '').strip()
+    if not due_date_str:
+        return JsonResponse({'success': False, 'error': 'due_date required'}, status=400)
+    new_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+
+    before_raw = request.POST.get('before_id', '').strip()
+    before_id = None
+    if before_raw:
+        try:
+            before_id = int(before_raw)
+        except ValueError:
+            before_id = None
+
+    others = list(
+        Task.objects.filter(user=request.user, due_date=new_date)
+        .exclude(pk=task.pk)
+        .order_by('order', 'id')
+    )
+
+    if before_id is not None and not any(t.id == before_id for t in others):
+        before_id = None
+
+    new_list = []
+    inserted = False
+    for t in others:
+        if before_id is not None and t.id == before_id and not inserted:
+            new_list.append(task)
+            inserted = True
+        new_list.append(t)
+    if not inserted:
+        new_list.append(task)
+
+    task.due_date = new_date
+    for i, t in enumerate(new_list):
+        t.order = i
+    Task.objects.bulk_update(new_list, ['order', 'due_date'])
+
+    return JsonResponse({
+        'success': True,
+        'due_date': new_date.isoformat(),
+        'orders': [{'id': t.id, 'order': t.order} for t in new_list],
     })
 
 
@@ -703,7 +774,7 @@ def api_kanban_events(request):
 
     tasks = Task.objects.filter(
         user=request.user, due_date__isnull=False
-    ).select_related('project').prefetch_related('tags')
+    ).select_related('project').prefetch_related('tags').order_by('due_date', 'order', 'id')
 
     if start:
         tasks = tasks.filter(due_date__gte=start)
@@ -715,6 +786,7 @@ def api_kanban_events(request):
         priority_labels = {1: 'low', 2: 'medium', 3: 'high', 4: 'urgent'}
         events.append({
             'id': task.id,
+            'order': task.order,
             'title': task.title,
             'start': task.due_date.isoformat(),
             'time': task.due_time.strftime('%H:%M') if task.due_time else None,

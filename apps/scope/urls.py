@@ -49,6 +49,7 @@ urlpatterns = [
     
     # Обновление даты задачи (drag-and-drop)
     path('tasks/<int:pk>/update-date/', views.task_update_date, name='task_update_date'),
+    path('tasks/<int:pk>/kanban-reorder/', views.task_kanban_reorder, name='task_kanban_reorder'),
 
     # API
     path('api/tasks/', views.api_tasks, name='api_tasks'),
