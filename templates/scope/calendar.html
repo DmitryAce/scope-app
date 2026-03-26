@@ -39,7 +39,7 @@ class KanbanCalendar {
         this.events = [];
         this.expandedWeeks = new Set();
         this.draggedTask = null;
-        this.init();
+        void this.init('instant');
     }
 
     formatDateStr(y, m, d) {
@@ -51,9 +51,31 @@ class KanbanCalendar {
         return this.formatDateStr(t.getFullYear(), t.getMonth(), t.getDate());
     }
 
-    async init() {
+    /**
+     * @param {'instant'|'smooth'|undefined} scrollToday — после render прокрутить к ячейке «сегодня»
+     */
+    async init(scrollToday) {
         await this.loadEvents();
         this.render();
+        if (scrollToday === 'instant' || scrollToday === 'smooth') {
+            this.scheduleScrollToToday(scrollToday === 'smooth');
+        }
+    }
+
+    scheduleScrollToToday(smooth) {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => this.scrollToTodayCell(smooth));
+        });
+    }
+
+    scrollToTodayCell(smooth) {
+        const el = document.querySelector('#kanbanWeeks .kanban-day.today');
+        if (!el) return;
+        el.scrollIntoView({
+            behavior: smooth ? 'smooth' : 'instant',
+            block: 'center',
+            inline: 'nearest',
+        });
     }
 
     async loadEvents() {
@@ -441,19 +463,19 @@ class KanbanCalendar {
     prevMonth() {
         this.currentDate.setMonth(this.currentDate.getMonth() - 1);
         this.expandedWeeks.clear();
-        this.init();
+        void this.init();
     }
 
     nextMonth() {
         this.currentDate.setMonth(this.currentDate.getMonth() + 1);
         this.expandedWeeks.clear();
-        this.init();
+        void this.init();
     }
 
     goToToday() {
         this.currentDate = new Date();
         this.expandedWeeks.clear();
-        this.init();
+        void this.init('smooth');
     }
 
     async reload() {
