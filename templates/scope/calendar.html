@@ -199,6 +199,7 @@ class KanbanCalendar {
                     .filter(e => e.start === day.dateStr)
                     .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || a.id - b.id);
                 const isPast = day.dateStr < todayStr && !day.isToday;
+                const firstTaskId = dayEvents.length ? String(dayEvents[0].id) : '';
 
                 html += `
                     <div class="kanban-day ${day.isToday ? 'today' : ''} ${!day.isCurrentMonth ? 'other-month' : ''} ${isPast ? 'past' : ''}"
@@ -206,7 +207,10 @@ class KanbanCalendar {
                          ondragover="kanbanCalendar.onDragOverDay(event)"
                          ondragleave="kanbanCalendar.onDragLeaveDay(event)"
                          ondrop="kanbanCalendar.onDropDay(event, '${day.dateStr}')">
-                        <div class="kanban-day-header">
+                        <div class="kanban-day-header kanban-day-drop-start"
+                             ondragover="kanbanCalendar.onDragOverDayStart(event)"
+                             ondragleave="kanbanCalendar.onDragLeaveDayStart(event)"
+                             ondrop="kanbanCalendar.onDropDayStart(event, '${day.dateStr}', '${firstTaskId}')">
                             <span class="kanban-day-name">${dayNames[dIdx]}</span>
                             <span class="kanban-day-num ${day.isToday ? 'today-num' : ''}">${day.date.getDate()}</span>
                         </div>
@@ -224,9 +228,14 @@ class KanbanCalendar {
 
                 html += `
                         </div>
-                        <button class="kanban-add-btn" onclick="openTaskModal({due_date: '${day.dateStr}'})" title="Добавить задачу">
-                            <i class="ri-add-line"></i>
-                        </button>
+                        <div class="kanban-day-drop-end"
+                             ondragover="kanbanCalendar.onDragOverDayEnd(event)"
+                             ondragleave="kanbanCalendar.onDragLeaveDayEnd(event)"
+                             ondrop="kanbanCalendar.onDropDayEnd(event, '${day.dateStr}')">
+                            <button type="button" class="kanban-add-btn" onclick="openTaskModal({due_date: '${day.dateStr}'})" title="Добавить задачу">
+                                <i class="ri-add-line"></i>
+                            </button>
+                        </div>
                     </div>`;
             });
 
@@ -285,10 +294,14 @@ class KanbanCalendar {
         e.currentTarget.classList.remove('dragging');
         document.querySelectorAll('.kanban-day.drag-over').forEach(d => d.classList.remove('drag-over'));
         document.querySelectorAll('.kanban-drop-slot.drag-active').forEach(s => s.classList.remove('drag-active'));
+        document.querySelectorAll('.kanban-drop-zone-active').forEach(z => z.classList.remove('kanban-drop-zone-active'));
     }
 
     onDragOverDay(e) {
         if (e.target.closest('.kanban-drop-slot')) return;
+        if (e.target.closest('.kanban-day-drop-start')) return;
+        if (e.target.closest('.kanban-day-drop-end')) return;
+        if (e.target.closest('.kanban-task')) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         const day = e.target.closest('.kanban-day');
@@ -300,6 +313,56 @@ class KanbanCalendar {
         if (day && !day.contains(e.relatedTarget)) {
             day.classList.remove('drag-over');
         }
+    }
+
+    onDragOverDayStart(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('kanban-drop-zone-active');
+        const day = e.currentTarget.closest('.kanban-day');
+        if (day) day.classList.remove('drag-over');
+    }
+
+    onDragLeaveDayStart(e) {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            e.currentTarget.classList.remove('kanban-drop-zone-active');
+        }
+    }
+
+    async onDropDayStart(e, dateStr, firstTaskId) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('kanban-drop-zone-active');
+        const day = e.currentTarget.closest('.kanban-day');
+        if (day) day.classList.remove('drag-over');
+        document.querySelectorAll('.kanban-drop-slot.drag-active').forEach(s => s.classList.remove('drag-active'));
+        await this.applyKanbanReorder(dateStr, firstTaskId);
+    }
+
+    onDragOverDayEnd(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('kanban-drop-zone-active');
+        const day = e.currentTarget.closest('.kanban-day');
+        if (day) day.classList.remove('drag-over');
+    }
+
+    onDragLeaveDayEnd(e) {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            e.currentTarget.classList.remove('kanban-drop-zone-active');
+        }
+    }
+
+    async onDropDayEnd(e, dateStr) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('kanban-drop-zone-active');
+        const day = e.currentTarget.closest('.kanban-day');
+        if (day) day.classList.remove('drag-over');
+        document.querySelectorAll('.kanban-drop-slot.drag-active').forEach(s => s.classList.remove('drag-active'));
+        await this.applyKanbanReorder(dateStr, '');
     }
 
     onSlotDragOver(e) {
