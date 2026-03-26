@@ -10,16 +10,16 @@
     </div>
     
     {% if tag_list %}
-    <div class="tags-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+    <div class="tags-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
         {% for tag in tag_list %}
-        <div class="tag-card" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; align-items: center; justify-content: space-between;">
+        <div class="tag-card" data-id="{{ tag.id }}" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease; border-left: 3px solid {{ tag.color }};">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span class="tag-dot" style="background: {{ tag.color }}; width: 12px; height: 12px;"></span>
                 <span style="font-weight: 500;">{{ tag.name }}</span>
             </div>
-            <div style="display: flex; gap: 8px;">
-                <span style="color: var(--text-muted); font-size: 13px;">{{ tag.tasks.count }} задач</span>
-                <button class="btn-icon" onclick="deleteTag({{ tag.id }})" style="color: var(--text-muted);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: var(--text-muted); font-size: 13px;">{{ tag.tasks.count }} {{ tag.tasks.count|pluralize:"задача,задачи,задач" }}</span>
+                <button class="btn-icon" onclick="deleteTag({{ tag.id }})" style="color: var(--text-muted);" title="Удалить тег">
                     <i class="ri-close-line"></i>
                 </button>
             </div>
@@ -40,26 +40,4 @@
     </div>
     {% endif %}
 </div>
-
-<script>
-function deleteTag(tagId) {
-    if (!confirm('Удалить этот тег?')) return;
-    
-    fetch(`/tags/${tagId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.reload();
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
-</script>
 {% endblock %}
-

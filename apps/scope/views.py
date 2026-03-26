@@ -3,8 +3,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.db.models import Q
-from datetime import datetime, timedelta
+from django.db.models import Q, Count
+from datetime import datetime, timedelta, date
 import json
 
 from .models import Task, Project, Tag, ChecklistItem, TaskNote, TaskLink, TaskAttachment
@@ -633,6 +633,100 @@ def api_calendar_events(request):
 # ==================
 # Вспомогательные функции
 # ==================
+
+@login_required
+@require_POST
+def task_update_date(request, pk):
+    """Обновление даты задачи (для drag-and-drop в канбане)"""
+    task = get_object_or_404(Task, pk=pk, user=request.user)
+    due_date = request.POST.get('due_date')
+    task.due_date = due_date if due_date else None
+    task.save()
+    return JsonResponse({
+        'success': True,
+        'due_date': task.due_date.isoformat() if task.due_date else None,
+    })
+
+
+@login_required
+@require_GET
+def api_stats(request):
+    """API статистики продуктивности"""
+    user = request.user
+    today = timezone.now().date()
+    week_start = today - timedelta(days=today.weekday())
+
+    completed_today = Task.objects.filter(
+        user=user, is_completed=True, completed_at__date=today
+    ).count()
+    completed_this_week = Task.objects.filter(
+        user=user, is_completed=True, completed_at__date__gte=week_start
+    ).count()
+    total_active = Task.objects.filter(user=user, is_completed=False).count()
+    total_completed = Task.objects.filter(user=user, is_completed=True).count()
+    overdue = Task.objects.filter(
+        user=user, is_completed=False, due_date__lt=today
+    ).count()
+    today_tasks = Task.objects.filter(
+        user=user, is_completed=False, due_date=today
+    ).count()
+
+    streak = 0
+    check_date = today
+    while True:
+        if Task.objects.filter(user=user, is_completed=True, completed_at__date=check_date).exists():
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+
+    return JsonResponse({
+        'completed_today': completed_today,
+        'completed_this_week': completed_this_week,
+        'total_active': total_active,
+        'total_completed': total_completed,
+        'overdue': overdue,
+        'today_tasks': today_tasks,
+        'streak': streak,
+    })
+
+
+@login_required
+@require_GET
+def api_kanban_events(request):
+    """API для канбан-календаря — задачи на указанный период"""
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+
+    tasks = Task.objects.filter(
+        user=request.user, due_date__isnull=False
+    ).select_related('project').prefetch_related('tags')
+
+    if start:
+        tasks = tasks.filter(due_date__gte=start)
+    if end:
+        tasks = tasks.filter(due_date__lte=end)
+
+    events = []
+    for task in tasks:
+        priority_labels = {1: 'low', 2: 'medium', 3: 'high', 4: 'urgent'}
+        events.append({
+            'id': task.id,
+            'title': task.title,
+            'start': task.due_date.isoformat(),
+            'time': task.due_time.strftime('%H:%M') if task.due_time else None,
+            'priority': task.priority,
+            'priority_class': priority_labels.get(task.priority, 'medium'),
+            'completed': task.is_completed,
+            'overdue': task.is_overdue,
+            'project': task.project.name if task.project else None,
+            'projectColor': task.project.color if task.project else None,
+            'tags': [{'name': t.name, 'color': t.color} for t in task.tags.all()],
+            'url': f'/tasks/{task.id}/',
+        })
+
+    return JsonResponse(events, safe=False)
+
 
 def render_task_html(task):
     """Рендерит HTML для одной задачи (для AJAX)"""

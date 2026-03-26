@@ -1,606 +1,421 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="calendar-page">
-    <div class="calendar-layout">
-        <!-- Левая колонка - Календарь -->
-        <div class="calendar-left">
-            <div class="calendar-container" id="calendarContainer">
-                <div class="calendar-loading">
-                    <i class="ri-loader-4-line"></i>
-                    <p>Загрузка...</p>
-                </div>
-            </div>
+<div class="kanban-calendar" id="kanbanCalendar">
+    <div class="kanban-toolbar">
+        <div class="kanban-nav">
+            <button class="btn-icon" onclick="kanbanCalendar.prevMonth()" title="Предыдущий месяц">
+                <i class="ri-arrow-left-s-line"></i>
+            </button>
+            <h2 class="kanban-month-title" id="kanbanTitle">Загрузка...</h2>
+            <button class="btn-icon" onclick="kanbanCalendar.nextMonth()" title="Следующий месяц">
+                <i class="ri-arrow-right-s-line"></i>
+            </button>
         </div>
-        
-        <!-- Правая колонка - Задачи -->
-        <div class="calendar-right">
-            <div class="calendar-tasks-panel" id="tasksPanel">
-                <div class="tasks-panel-header">
-                    <h2 class="tasks-panel-title" id="tasksPanelTitle">Выберите дату</h2>
-                    <span class="tasks-panel-count" id="tasksPanelCount"></span>
-                </div>
-                <div class="tasks-panel-body" id="tasksPanelBody">
-                    <div class="tasks-panel-empty">
-                        <i class="ri-calendar-check-line"></i>
-                        <p>Нажмите на день в календаре</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Предстоящие задачи -->
-            <div class="upcoming-tasks" id="upcomingTasks">
-                <div class="tasks-panel-header">
-                    <h3 class="tasks-panel-subtitle">
-                        <i class="ri-time-line"></i>
-                        Предстоящие
-                    </h3>
-                </div>
-                <div class="tasks-panel-body" id="upcomingTasksBody">
-                    <!-- Заполняется JavaScript -->
-                </div>
-            </div>
+        <div class="kanban-actions">
+            <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.goToToday()">
+                <i class="ri-focus-3-line"></i> Сегодня
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.expandAll()">
+                <i class="ri-expand-up-down-line"></i> Раскрыть все
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.collapseAll()">
+                <i class="ri-collapse-diagonal-line"></i> Свернуть
+            </button>
+        </div>
+    </div>
+
+    <div class="kanban-weeks" id="kanbanWeeks">
+        <div class="kanban-loading">
+            <i class="ri-loader-4-line spin"></i>
+            <p>Загрузка задач...</p>
         </div>
     </div>
 </div>
-
-<style>
-.calendar-page {
-    height: calc(100vh - var(--header-height) - 48px);
-}
-
-.calendar-layout {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    gap: 24px;
-    height: 100%;
-}
-
-.calendar-left {
-    display: flex;
-    flex-direction: column;
-}
-
-.calendar-container {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    height: fit-content;
-}
-
-.calendar-right {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    overflow: hidden;
-}
-
-.calendar-tasks-panel {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 300px;
-}
-
-.upcoming-tasks {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    max-height: 250px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.tasks-panel-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border-light);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-}
-
-.tasks-panel-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.date-today-badge {
-    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
-    color: white;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.tasks-panel-subtitle {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.tasks-panel-count {
-    font-size: 13px;
-    color: var(--text-muted);
-    background: var(--bg-elevated);
-    padding: 2px 10px;
-    border-radius: 10px;
-}
-
-.tasks-panel-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-}
-
-.tasks-panel-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    color: var(--text-muted);
-    text-align: center;
-    gap: 12px;
-}
-
-.tasks-panel-empty i {
-    font-size: 48px;
-    opacity: 0.5;
-}
-
-/* Task cards for calendar */
-.calendar-task-card {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
-    margin-bottom: 8px;
-    transition: all var(--transition-fast);
-    text-decoration: none;
-    border-left: 3px solid var(--task-color, var(--accent-primary));
-}
-
-.calendar-task-card:hover {
-    background: var(--bg-elevated);
-    transform: translateX(4px);
-}
-
-.calendar-task-card.completed {
-    opacity: 0.6;
-}
-
-.calendar-task-card.completed .calendar-task-title {
-    text-decoration: line-through;
-}
-
-.calendar-task-checkbox {
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.calendar-task-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.calendar-task-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-    display: block;
-}
-
-.calendar-task-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.calendar-task-meta span {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.calendar-task-project {
-    font-weight: 500;
-}
-
-.calendar-task-time {
-    color: var(--text-secondary);
-}
-
-.calendar-task-priority {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 6px;
-}
-
-.calendar-task-desc {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-top: 6px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/* Overdue indicator */
-.task-overdue {
-    color: var(--priority-urgent) !important;
-}
-
-.task-today {
-    color: var(--accent-secondary) !important;
-}
-
-/* Calendar loading */
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.calendar-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    color: var(--text-muted);
-    gap: 12px;
-}
-
-.calendar-loading i {
-    font-size: 28px;
-    animation: spin 1s linear infinite;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-    .calendar-layout {
-        grid-template-columns: 1fr;
-    }
-    
-    .calendar-page {
-        height: auto;
-    }
-    
-    .calendar-tasks-panel {
-        min-height: 400px;
-    }
-}
-</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Full calendar class for the calendar page
-class CalendarView {
-    constructor(container) {
-        this.container = container;
+class KanbanCalendar {
+    constructor() {
         this.currentDate = new Date();
-        this.selectedDate = this.getTodayStr();
         this.events = [];
-        
+        this.expandedWeeks = new Set();
+        this.draggedTask = null;
         this.init();
     }
-    
-    formatDateStr(year, month, day) {
-        const m = String(month + 1).padStart(2, '0');
-        const d = String(day).padStart(2, '0');
-        return `${year}-${m}-${d}`;
+
+    formatDateStr(y, m, d) {
+        return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     }
-    
+
     getTodayStr() {
-        const today = new Date();
-        return this.formatDateStr(today.getFullYear(), today.getMonth(), today.getDate());
+        const t = new Date();
+        return this.formatDateStr(t.getFullYear(), t.getMonth(), t.getDate());
     }
-    
+
     async init() {
         await this.loadEvents();
         this.render();
     }
-    
+
     async loadEvents() {
-        const year = this.currentDate.getFullYear();
-        const month = this.currentDate.getMonth();
-        const start = this.formatDateStr(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0).getDate();
-        const end = this.formatDateStr(year, month, lastDay);
-        
+        const y = this.currentDate.getFullYear();
+        const m = this.currentDate.getMonth();
+        const firstDay = new Date(y, m, 1);
+        let startDay = firstDay.getDay();
+        startDay = startDay === 0 ? 6 : startDay - 1;
+        const calStart = new Date(y, m, 1 - startDay);
+        const lastDay = new Date(y, m + 1, 0);
+        const totalDays = startDay + lastDay.getDate();
+        const rows = Math.ceil(totalDays / 7);
+        const calEnd = new Date(calStart);
+        calEnd.setDate(calEnd.getDate() + rows * 7 - 1);
+
+        const start = this.formatDateStr(calStart.getFullYear(), calStart.getMonth(), calStart.getDate());
+        const end = this.formatDateStr(calEnd.getFullYear(), calEnd.getMonth(), calEnd.getDate());
+
         try {
-            const response = await fetch(`/api/calendar-events/?start=${start}&end=${end}`);
-            this.events = await response.json();
-        } catch (error) {
-            console.error('Error loading calendar events:', error);
+            const res = await fetch(`/api/kanban-events/?start=${start}&end=${end}`);
+            this.events = await res.json();
+        } catch (e) {
             this.events = [];
         }
     }
-    
-    render() {
-        const year = this.currentDate.getFullYear();
-        const month = this.currentDate.getMonth();
-        
-        const monthNames = [
-            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-        ];
-        
-        const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-        
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        
+
+    getWeeks() {
+        const y = this.currentDate.getFullYear();
+        const m = this.currentDate.getMonth();
+        const firstDay = new Date(y, m, 1);
+        const lastDay = new Date(y, m + 1, 0);
+
         let startDay = firstDay.getDay();
         startDay = startDay === 0 ? 6 : startDay - 1;
-        
-        const todayStr = this.getTodayStr();
-        
-        let html = `
-            <div class="calendar-header">
-                <h2 class="calendar-title">${monthNames[month]} ${year}</h2>
-                <div class="calendar-nav">
-                    <button class="btn-icon" onclick="calendar.prevMonth()">
-                        <i class="ri-arrow-left-s-line"></i>
-                    </button>
-                    <button class="btn btn-ghost btn-sm" onclick="calendar.goToToday()">Сегодня</button>
-                    <button class="btn-icon" onclick="calendar.nextMonth()">
-                        <i class="ri-arrow-right-s-line"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="calendar-grid">
-        `;
-        
-        // Day headers
-        dayNames.forEach(day => {
-            html += `<div class="calendar-day-header">${day}</div>`;
-        });
-        
-        // Previous month days
-        const prevMonthLastDay = new Date(year, month, 0);
-        for (let i = startDay - 1; i >= 0; i--) {
-            const day = prevMonthLastDay.getDate() - i;
-            html += `<div class="calendar-day other-month"><span class="calendar-day-number">${day}</span></div>`;
+
+        const calStart = new Date(y, m, 1 - startDay);
+        const totalDays = startDay + lastDay.getDate();
+        const rows = Math.ceil(totalDays / 7);
+
+        const weeks = [];
+        const cursor = new Date(calStart);
+
+        for (let w = 0; w < rows; w++) {
+            const days = [];
+            for (let d = 0; d < 7; d++) {
+                days.push({
+                    date: new Date(cursor),
+                    dateStr: this.formatDateStr(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()),
+                    isCurrentMonth: cursor.getMonth() === m,
+                    isToday: this.formatDateStr(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()) === this.getTodayStr(),
+                });
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            weeks.push({
+                index: w,
+                days,
+                startStr: days[0].dateStr,
+                endStr: days[6].dateStr,
+            });
         }
-        
-        // Current month days
-        for (let day = 1; day <= lastDay.getDate(); day++) {
-            const dateStr = this.formatDateStr(year, month, day);
-            const isToday = dateStr === todayStr;
-            const isSelected = dateStr === this.selectedDate;
-            const dayEvents = this.events.filter(e => e.start === dateStr);
-            
-            let dayClass = 'calendar-day';
-            if (isToday) dayClass += ' today';
-            if (isSelected) dayClass += ' selected';
-            if (dayEvents.length > 0) dayClass += ' has-events';
-            
+        return weeks;
+    }
+
+    render() {
+        const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+        const y = this.currentDate.getFullYear();
+        const m = this.currentDate.getMonth();
+
+        document.getElementById('kanbanTitle').textContent = `${months[m]} ${y}`;
+
+        const weeks = this.getWeeks();
+        const todayStr = this.getTodayStr();
+        const container = document.getElementById('kanbanWeeks');
+
+        // Auto-expand week containing today
+        const todayWeekIdx = weeks.findIndex(w => w.days.some(d => d.dateStr === todayStr));
+        if (this.expandedWeeks.size === 0 && todayWeekIdx >= 0) {
+            this.expandedWeeks.add(todayWeekIdx);
+        }
+
+        const dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+        const monthNamesShort = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+        let html = '';
+
+        weeks.forEach((week, wIdx) => {
+            const isExpanded = this.expandedWeeks.has(wIdx);
+            const weekEvents = this.events.filter(e =>
+                e.start >= week.startStr && e.start <= week.endStr
+            );
+            const activeEvents = weekEvents.filter(e => !e.completed);
+            const completedCount = weekEvents.filter(e => e.completed).length;
+
+            const hasToday = week.days.some(d => d.isToday);
+
+            const startD = week.days[0].date;
+            const endD = week.days[6].date;
+            const startLabel = `${startD.getDate()} ${monthNamesShort[startD.getMonth()]}`;
+            const endLabel = `${endD.getDate()} ${monthNamesShort[endD.getMonth()]}`;
+
             html += `
-                <div class="${dayClass}" onclick="calendar.selectDate('${dateStr}')">
-                    <span class="calendar-day-number">${day}</span>
-                    ${dayEvents.length > 0 ? `
-                        <div class="calendar-day-tasks">
-                            ${dayEvents.slice(0, 3).map(e => `<span class="calendar-day-dot" style="background: ${e.color}"></span>`).join('')}
+            <div class="kanban-week ${isExpanded ? 'expanded' : ''} ${hasToday ? 'has-today' : ''}">
+                <div class="kanban-week-header" onclick="kanbanCalendar.toggleWeek(${wIdx})">
+                    <div class="kanban-week-left">
+                        <i class="ri-arrow-right-s-line kanban-chevron"></i>
+                        <span class="kanban-week-label">${startLabel} — ${endLabel}</span>
+                        ${hasToday ? '<span class="kanban-today-badge">сейчас</span>' : ''}
+                    </div>
+                    <div class="kanban-week-right">
+                        ${activeEvents.length > 0 ? `<span class="kanban-week-count">${activeEvents.length} ${this.pluralize(activeEvents.length, 'задача', 'задачи', 'задач')}</span>` : ''}
+                        ${completedCount > 0 ? `<span class="kanban-week-done"><i class="ri-check-line"></i> ${completedCount}</span>` : ''}
+                    </div>
+                </div>
+                <div class="kanban-week-body" style="${isExpanded ? '' : 'display:none'}">
+                    <div class="kanban-days">`;
+
+            week.days.forEach((day, dIdx) => {
+                const dayEvents = this.events.filter(e => e.start === day.dateStr);
+                const isPast = day.dateStr < todayStr && !day.isToday;
+
+                html += `
+                    <div class="kanban-day ${day.isToday ? 'today' : ''} ${!day.isCurrentMonth ? 'other-month' : ''} ${isPast ? 'past' : ''}"
+                         data-date="${day.dateStr}"
+                         ondragover="kanbanCalendar.onDragOver(event)"
+                         ondragleave="kanbanCalendar.onDragLeave(event)"
+                         ondrop="kanbanCalendar.onDrop(event, '${day.dateStr}')">
+                        <div class="kanban-day-header">
+                            <span class="kanban-day-name">${dayNames[dIdx]}</span>
+                            <span class="kanban-day-num ${day.isToday ? 'today-num' : ''}">${day.date.getDate()}</span>
                         </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-        
-        // Next month days
-        const totalCells = startDay + lastDay.getDate();
-        const rows = Math.ceil(totalCells / 7);
-        const remainingCells = (rows * 7) - totalCells;
-        for (let day = 1; day <= remainingCells; day++) {
-            html += `<div class="calendar-day other-month"><span class="calendar-day-number">${day}</span></div>`;
-        }
-        
-        html += '</div>';
-        
-        this.container.innerHTML = html;
-        
-        // Update side panel
-        this.updateTasksPanel();
-        this.updateUpcomingTasks();
-    }
-    
-    updateTasksPanel() {
-        const todayStr = this.getTodayStr();
-        const selectedDateStr = this.selectedDate || todayStr;
-        const selectedEvents = this.events.filter(e => e.start === selectedDateStr);
-        
-        // Update title
-        const titleEl = document.getElementById('tasksPanelTitle');
-        const countEl = document.getElementById('tasksPanelCount');
-        const bodyEl = document.getElementById('tasksPanelBody');
-        
-        if (titleEl) {
-            const fullDate = this.formatFullDate(selectedDateStr);
-            if (selectedDateStr === todayStr) {
-                titleEl.innerHTML = `<span class="date-today-badge">Сегодня</span> ${fullDate}`;
-            } else {
-                titleEl.textContent = fullDate;
-            }
-        }
-        
-        if (countEl) {
-            if (selectedEvents.length > 0) {
-                countEl.textContent = `${selectedEvents.length} ${this.pluralize(selectedEvents.length, 'задача', 'задачи', 'задач')}`;
-            } else {
-                countEl.textContent = '';
-            }
-        }
-        
-        if (bodyEl) {
-            if (selectedEvents.length > 0) {
-                bodyEl.innerHTML = selectedEvents.map(e => this.renderTaskCard(e)).join('');
-            } else {
-                bodyEl.innerHTML = `
-                    <div class="tasks-panel-empty">
-                        <i class="ri-checkbox-circle-line"></i>
-                        <p>Нет задач на этот день</p>
-                        <button class="btn btn-primary btn-sm" onclick="openTaskModal()">
-                            <i class="ri-add-line"></i> Добавить
+                        <div class="kanban-day-tasks">`;
+
+                dayEvents.forEach(task => {
+                    html += this.renderTask(task);
+                });
+
+                html += `
+                        </div>
+                        <button class="kanban-add-btn" onclick="openTaskModal({due_date: '${day.dateStr}'})" title="Добавить задачу">
+                            <i class="ri-add-line"></i>
                         </button>
+                    </div>`;
+            });
+
+            html += `
                     </div>
-                `;
-            }
-        }
-    }
-    
-    formatFullDate(dateStr) {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-        const monthNames = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                           'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-        return `${dayNames[date.getDay()]}, ${day} ${monthNames[month - 1]}`;
-    }
-    
-    pluralize(n, one, few, many) {
-        const mod10 = n % 10;
-        const mod100 = n % 100;
-        if (mod100 >= 11 && mod100 <= 19) return many;
-        if (mod10 === 1) return one;
-        if (mod10 >= 2 && mod10 <= 4) return few;
-        return many;
-    }
-    
-    updateUpcomingTasks() {
-        const bodyEl = document.getElementById('upcomingTasksBody');
-        if (!bodyEl) return;
-        
-        const todayStr = this.getTodayStr();
-        const upcoming = this.events
-            .filter(e => e.start >= todayStr && !e.completed)
-            .sort((a, b) => a.start.localeCompare(b.start))
-            .slice(0, 5);
-        
-        if (upcoming.length > 0) {
-            bodyEl.innerHTML = upcoming.map(e => this.renderTaskCard(e, true)).join('');
-        } else {
-            bodyEl.innerHTML = '<p style="padding: 16px; color: var(--text-muted); text-align: center;">Нет предстоящих задач</p>';
-        }
-    }
-    
-    renderTaskCard(task, showDate = false) {
-        const priorityColors = {
-            1: 'var(--priority-low)',
-            2: 'var(--priority-medium)',
-            3: 'var(--priority-high)',
-            4: 'var(--priority-urgent)'
-        };
-        
-        const todayStr = this.getTodayStr();
-        let dateLabel = '';
-        if (showDate) {
-            if (task.start === todayStr) {
-                dateLabel = '<span class="task-today">Сегодня</span>';
-            } else if (task.start < todayStr) {
-                dateLabel = `<span class="task-overdue">Просрочено</span>`;
-            } else {
-                dateLabel = `<span>${this.formatDisplayDate(task.start)}</span>`;
-            }
-        }
-        
-        return `
-            <a href="${task.url}" class="calendar-task-card ${task.completed ? 'completed' : ''}" style="--task-color: ${task.color}">
-                <div class="calendar-task-priority" style="background: ${task.color}"></div>
-                <div class="calendar-task-content">
-                    <span class="calendar-task-title">${escapeHtml(task.title)}</span>
-                    <div class="calendar-task-meta">
-                        ${task.time ? `<span class="calendar-task-time"><i class="ri-time-line"></i> ${task.time}</span>` : ''}
-                        ${task.project ? `<span class="calendar-task-project" style="color: ${task.projectColor || 'var(--accent-secondary)'}">${escapeHtml(task.project)}</span>` : ''}
-                        ${dateLabel}
-                    </div>
-                    ${task.description ? `<p class="calendar-task-desc">${escapeHtml(task.description)}</p>` : ''}
                 </div>
-            </a>
-        `;
-    }
-    
-    selectDate(dateStr) {
-        this.selectedDate = dateStr;
-        
-        // Update selection visually
-        this.container.querySelectorAll('.calendar-day').forEach(day => {
-            day.classList.remove('selected');
-            // Find the day with matching date
-            const onclick = day.getAttribute('onclick');
-            if (onclick && onclick.includes(`'${dateStr}'`)) {
-                day.classList.add('selected');
-            }
+            </div>`;
         });
-        
-        this.updateTasksPanel();
+
+        container.innerHTML = html;
     }
-    
-    // Переопределяем методы навигации чтобы обновлять панель
+
+    renderTask(task) {
+        const priorityColors = { low: 'var(--priority-low)', medium: 'var(--priority-medium)', high: 'var(--priority-high)', urgent: 'var(--priority-urgent)' };
+        const color = priorityColors[task.priority_class] || 'var(--priority-medium)';
+
+        return `
+            <div class="kanban-task ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}"
+                 draggable="true"
+                 data-task-id="${task.id}"
+                 ondragstart="kanbanCalendar.onDragStart(event, ${task.id})"
+                 ondragend="kanbanCalendar.onDragEnd(event)">
+                <div class="kanban-task-priority" style="background:${color}"></div>
+                <div class="kanban-task-body">
+                    <a href="${task.url}" class="kanban-task-title">${this.escapeHtml(task.title)}</a>
+                    <div class="kanban-task-meta">
+                        ${task.time ? `<span><i class="ri-time-line"></i>${task.time}</span>` : ''}
+                        ${task.project ? `<span style="color:${task.projectColor || 'var(--accent-secondary)'}">${this.escapeHtml(task.project)}</span>` : ''}
+                    </div>
+                </div>
+                <button class="kanban-task-check" onclick="event.stopPropagation(); kanbanCalendar.toggleTaskFromKanban(${task.id})" title="${task.completed ? 'Вернуть' : 'Завершить'}">
+                    <i class="${task.completed ? 'ri-checkbox-circle-fill' : 'ri-checkbox-blank-circle-line'}"></i>
+                </button>
+            </div>`;
+    }
+
+    // Drag and Drop
+    onDragStart(e, taskId) {
+        this.draggedTask = taskId;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', taskId);
+        e.target.classList.add('dragging');
+    }
+
+    onDragEnd(e) {
+        e.target.classList.remove('dragging');
+        document.querySelectorAll('.kanban-day.drag-over').forEach(d => d.classList.remove('drag-over'));
+    }
+
+    onDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const day = e.target.closest('.kanban-day');
+        if (day) day.classList.add('drag-over');
+    }
+
+    onDragLeave(e) {
+        const day = e.target.closest('.kanban-day');
+        if (day && !day.contains(e.relatedTarget)) {
+            day.classList.remove('drag-over');
+        }
+    }
+
+    async onDrop(e, dateStr) {
+        e.preventDefault();
+        const day = e.target.closest('.kanban-day');
+        if (day) day.classList.remove('drag-over');
+
+        const taskId = this.draggedTask;
+        if (!taskId) return;
+
+        // Optimistic: move task card in DOM
+        const taskEl = document.querySelector(`.kanban-task[data-task-id="${taskId}"]`);
+        const targetTasks = day?.querySelector('.kanban-day-tasks');
+        if (taskEl && targetTasks) {
+            targetTasks.appendChild(taskEl);
+            taskEl.style.animation = 'slideIn 0.3s ease';
+        }
+
+        try {
+            const data = await apiFetch(`/tasks/${taskId}/update-date/`, {
+                method: 'POST',
+                body: `due_date=${dateStr}`,
+            });
+            if (data.success) {
+                showToast('Задача перемещена');
+                // Update events cache
+                const evt = this.events.find(ev => ev.id === taskId);
+                if (evt) evt.start = dateStr;
+            } else {
+                this.reload();
+            }
+        } catch (err) {
+            showToast('Ошибка при перемещении', 'error');
+            this.reload();
+        }
+    }
+
+    async toggleTaskFromKanban(taskId) {
+        try {
+            const data = await apiFetch(`/tasks/${taskId}/toggle/`, { method: 'POST' });
+            if (data.success) {
+                const taskEl = document.querySelector(`.kanban-task[data-task-id="${taskId}"]`);
+                if (taskEl) {
+                    if (data.is_completed) {
+                        taskEl.classList.add('completed');
+                        taskEl.querySelector('.kanban-task-check i').className = 'ri-checkbox-circle-fill';
+                        taskEl.style.transition = 'all 0.4s ease';
+                        taskEl.style.opacity = '0.4';
+                        showToast('Задача завершена! ✓');
+                    } else {
+                        taskEl.classList.remove('completed');
+                        taskEl.querySelector('.kanban-task-check i').className = 'ri-checkbox-blank-circle-line';
+                        taskEl.style.opacity = '1';
+                        showToast('Задача возвращена', 'info');
+                    }
+                }
+                const evt = this.events.find(ev => ev.id === taskId);
+                if (evt) evt.completed = data.is_completed;
+                updateSidebarCounts();
+            }
+        } catch (err) {
+            showToast('Ошибка', 'error');
+        }
+    }
+
+    toggleWeek(idx) {
+        if (this.expandedWeeks.has(idx)) {
+            this.expandedWeeks.delete(idx);
+        } else {
+            this.expandedWeeks.add(idx);
+        }
+        const weekEls = document.querySelectorAll('.kanban-week');
+        const el = weekEls[idx];
+        if (!el) return;
+
+        const body = el.querySelector('.kanban-week-body');
+        if (this.expandedWeeks.has(idx)) {
+            el.classList.add('expanded');
+            body.style.display = '';
+            body.style.maxHeight = '0';
+            body.style.overflow = 'hidden';
+            body.style.transition = 'max-height 0.4s ease';
+            requestAnimationFrame(() => { body.style.maxHeight = body.scrollHeight + 'px'; });
+            setTimeout(() => { body.style.maxHeight = ''; body.style.overflow = ''; }, 400);
+        } else {
+            el.classList.remove('expanded');
+            body.style.maxHeight = body.scrollHeight + 'px';
+            body.style.overflow = 'hidden';
+            body.style.transition = 'max-height 0.3s ease';
+            requestAnimationFrame(() => { body.style.maxHeight = '0'; });
+            setTimeout(() => { body.style.display = 'none'; body.style.overflow = ''; }, 300);
+        }
+    }
+
+    expandAll() {
+        const weekEls = document.querySelectorAll('.kanban-week');
+        weekEls.forEach((el, idx) => {
+            this.expandedWeeks.add(idx);
+            el.classList.add('expanded');
+            const body = el.querySelector('.kanban-week-body');
+            body.style.display = '';
+            body.style.maxHeight = '';
+            body.style.overflow = '';
+        });
+    }
+
+    collapseAll() {
+        const weekEls = document.querySelectorAll('.kanban-week');
+        weekEls.forEach((el, idx) => {
+            this.expandedWeeks.delete(idx);
+            el.classList.remove('expanded');
+            const body = el.querySelector('.kanban-week-body');
+            body.style.display = 'none';
+        });
+    }
+
     prevMonth() {
         this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+        this.expandedWeeks.clear();
         this.init();
     }
-    
+
     nextMonth() {
         this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+        this.expandedWeeks.clear();
         this.init();
     }
-    
+
     goToToday() {
         this.currentDate = new Date();
-        this.selectedDate = this.getTodayStr();
+        this.expandedWeeks.clear();
         this.init();
     }
-    
-    formatDisplayDate(dateStr) {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                       'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-        return `${day} ${months[month - 1]}`;
+
+    async reload() {
+        await this.loadEvents();
+        this.render();
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
+
+    pluralize(n, one, few, many) {
+        const m10 = n % 10, m100 = n % 100;
+        if (m100 >= 11 && m100 <= 19) return many;
+        if (m10 === 1) return one;
+        if (m10 >= 2 && m10 <= 4) return few;
+        return many;
     }
 }
 
-// Initialize calendar
 document.addEventListener('DOMContentLoaded', () => {
-    const calendarContainer = document.getElementById('calendarContainer');
-    if (calendarContainer) {
-        window.calendar = new CalendarView(calendarContainer);
-    }
+    window.kanbanCalendar = new KanbanCalendar();
 });
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 </script>
 {% endblock %}

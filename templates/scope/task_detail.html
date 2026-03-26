@@ -483,28 +483,19 @@
 
 <script>
 // Links
-function addLink(taskId) {
+async function addLink(taskId) {
     const urlInput = document.getElementById('linkUrlInput');
     const titleInput = document.getElementById('linkTitleInput');
     const url = urlInput.value.trim();
     const title = titleInput.value.trim();
-    
-    if (!url) {
-        urlInput.focus();
-        return;
-    }
-    
-    fetch(`/tasks/${taskId}/links/add/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
-    })
-    .then(response => response.json())
-    .then(data => {
+
+    if (!url) { urlInput.focus(); return; }
+
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/links/add/`, {
+            method: 'POST',
+            body: `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
+        });
         if (data.success) {
             const list = document.getElementById('linksList');
             const item = document.createElement('div');
@@ -520,72 +511,59 @@ function addLink(taskId) {
                     <i class="ri-close-line"></i>
                 </button>
             `;
+            item.style.animation = 'slideIn 0.3s ease';
             list.appendChild(item);
             urlInput.value = '';
             titleInput.value = '';
+            showToast('Ссылка добавлена');
         } else {
-            alert(data.error || 'Ошибка при добавлении ссылки');
+            showToast(data.error || 'Ошибка', 'error');
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) { showToast('Ошибка', 'error'); }
 }
 
-function deleteLink(linkId) {
-    fetch(`/links/${linkId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
+async function deleteLink(linkId) {
+    try {
+        const data = await apiFetch(`/links/${linkId}/delete/`, { method: 'POST' });
         if (data.success) {
             const item = document.querySelector(`.link-item[data-id="${linkId}"]`);
-            if (item) item.remove();
+            if (item) {
+                item.style.transition = 'all 0.2s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-20px)';
+                setTimeout(() => item.remove(), 200);
+            }
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) { showToast('Ошибка', 'error'); }
 }
 
-// Enter to add link
 document.getElementById('linkUrlInput')?.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        addLink({{ task.id }});
-    }
+    if (e.key === 'Enter') { e.preventDefault(); addLink({{ task.id }}); }
 });
-
 document.getElementById('linkTitleInput')?.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        addLink({{ task.id }});
-    }
+    if (e.key === 'Enter') { e.preventDefault(); addLink({{ task.id }}); }
 });
 
 // Attachments
-function uploadAttachment(taskId) {
+async function uploadAttachment(taskId) {
     const input = document.getElementById('attachmentInput');
     const dropZone = document.getElementById('dropZone');
-    
     if (!input.files.length) return;
-    
-    const file = input.files[0];
+
     const formData = new FormData();
-    formData.append('file', file);
-    
+    formData.append('file', input.files[0]);
     dropZone.classList.add('uploading');
-    
-    fetch(`/tasks/${taskId}/attachments/add/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: formData,
-    })
-    .then(response => response.json())
-    .then(data => {
+
+    try {
+        const res = await fetch(`/tasks/${taskId}/attachments/add/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCSRFToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: formData,
+        });
+        const data = await res.json();
         dropZone.classList.remove('uploading');
         if (data.success) {
             const list = document.getElementById('attachmentsList');
@@ -602,144 +580,108 @@ function uploadAttachment(taskId) {
                     <i class="ri-close-line"></i>
                 </button>
             `;
+            item.style.animation = 'slideIn 0.3s ease';
             list.appendChild(item);
             input.value = '';
+            showToast('Файл загружен');
         } else {
-            alert(data.error || 'Ошибка при загрузке файла');
+            showToast(data.error || 'Ошибка', 'error');
         }
-    })
-    .catch(error => {
+    } catch (err) {
         dropZone.classList.remove('uploading');
-        console.error('Error:', error);
-    });
+        showToast('Ошибка загрузки', 'error');
+    }
 }
 
-function deleteAttachment(attId) {
-    fetch(`/attachments/${attId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
+async function deleteAttachment(attId) {
+    try {
+        const data = await apiFetch(`/attachments/${attId}/delete/`, { method: 'POST' });
         if (data.success) {
             const item = document.querySelector(`.attachment-item[data-id="${attId}"]`);
-            if (item) item.remove();
+            if (item) {
+                item.style.transition = 'all 0.2s ease';
+                item.style.opacity = '0';
+                setTimeout(() => item.remove(), 200);
+            }
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) { showToast('Ошибка', 'error'); }
 }
 
-// Drag and Drop
+// Drag and Drop for attachments
 const dropZone = document.getElementById('dropZone');
 const attachmentInput = document.getElementById('attachmentInput');
 
 if (dropZone) {
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+        dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
     });
-    
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+    ['dragenter', 'dragover'].forEach(ev => {
+        dropZone.addEventListener(ev, () => dropZone.classList.add('drag-over'), false);
     });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+    ['dragleave', 'drop'].forEach(ev => {
+        dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over'), false);
     });
-    
     dropZone.addEventListener('drop', function(e) {
-        const files = e.dataTransfer.files;
-        if (files.length) {
-            attachmentInput.files = files;
+        if (e.dataTransfer.files.length) {
+            attachmentInput.files = e.dataTransfer.files;
             uploadAttachment({{ task.id }});
         }
     }, false);
 }
 
 // Inline Title Edit
-function saveTaskTitle(taskId) {
+async function saveTaskTitle(taskId) {
     const input = document.getElementById('taskTitleInput');
     const newTitle = input.value.trim();
-    
-    if (!newTitle) {
-        // Восстановить предыдущее значение
-        input.value = input.defaultValue;
-        return;
-    }
-    
+    if (!newTitle) { input.value = input.defaultValue; return; }
     if (newTitle === input.defaultValue) return;
-    
+
     input.classList.add('saving');
-    
-    fetch(`/tasks/${taskId}/update-inline/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: `title=${encodeURIComponent(newTitle)}`,
-    })
-    .then(response => response.json())
-    .then(data => {
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/update-inline/`, {
+            method: 'POST',
+            body: `title=${encodeURIComponent(newTitle)}`,
+        });
         input.classList.remove('saving');
         if (data.success) {
             input.defaultValue = data.title;
-            // Показать короткую индикацию успеха
             input.style.boxShadow = '0 0 0 2px var(--priority-low)';
-            setTimeout(() => {
-                input.style.boxShadow = '';
-            }, 500);
+            setTimeout(() => { input.style.boxShadow = ''; }, 600);
+            showToast('Сохранено');
         }
-    })
-    .catch(error => {
+    } catch (err) {
         input.classList.remove('saving');
-        console.error('Error:', error);
-    });
+        showToast('Ошибка сохранения', 'error');
+    }
 }
 
 // Priority Change
-function setPriority(taskId, priority) {
+async function setPriority(taskId, priority) {
     const selector = document.getElementById('prioritySelector');
-    const currentPriority = parseInt(selector.dataset.current);
-    
-    if (priority === currentPriority) return;
-    
-    // Обновляем UI сразу
+    const prev = parseInt(selector.dataset.current);
+    if (priority === prev) return;
+
     selector.querySelectorAll('.priority-option').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.priority) === priority);
     });
     selector.dataset.current = priority;
-    
-    fetch(`/tasks/${taskId}/update-inline/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: `priority=${priority}`,
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            // Откат если ошибка
+
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/update-inline/`, {
+            method: 'POST',
+            body: `priority=${priority}`,
+        });
+        if (data.success) {
+            showToast(`Приоритет: ${data.priority_display}`);
+        } else {
             selector.querySelectorAll('.priority-option').forEach(btn => {
-                btn.classList.toggle('active', parseInt(btn.dataset.priority) === currentPriority);
+                btn.classList.toggle('active', parseInt(btn.dataset.priority) === prev);
             });
-            selector.dataset.current = currentPriority;
+            selector.dataset.current = prev;
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+    } catch (err) {
+        selector.dataset.current = prev;
+    }
 }
 </script>
 {% endblock %}

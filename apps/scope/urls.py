@@ -47,8 +47,13 @@ urlpatterns = [
     path('tasks/<int:task_pk>/attachments/add/', views.attachment_add, name='attachment_add'),
     path('attachments/<int:pk>/delete/', views.attachment_delete, name='attachment_delete'),
     
-    # API для календаря
+    # Обновление даты задачи (drag-and-drop)
+    path('tasks/<int:pk>/update-date/', views.task_update_date, name='task_update_date'),
+
+    # API
     path('api/tasks/', views.api_tasks, name='api_tasks'),
     path('api/calendar-events/', views.api_calendar_events, name='api_calendar_events'),
+    path('api/kanban-events/', views.api_kanban_events, name='api_kanban_events'),
+    path('api/stats/', views.api_stats, name='api_stats'),
 ]
 

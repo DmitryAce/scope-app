@@ -2,6 +2,9 @@
 
 {% block content %}
 <div class="today-view">
+    <!-- Stats Widget -->
+    <div class="stats-widget" id="statsWidget"></div>
+
     <!-- Quick Add -->
     <div class="quick-add">
         <input type="text" 
@@ -9,6 +12,7 @@
                class="quick-add-input" 
                placeholder="Добавить задачу на сегодня..."
                data-due-date="{{ today|date:'Y-m-d' }}"
+               data-project=""
                autocomplete="off">
         <button class="btn btn-primary" onclick="quickAddTask()">
             <i class="ri-add-line"></i>

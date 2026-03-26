@@ -1,15 +1,117 @@
 /**
- * SCOPE - Task Tracking App
- * Main JavaScript File
+ * SCOPE — Zen Task Planner
+ * Main JavaScript — Full AJAX, smooth transitions, toast notifications
  */
 
 // ====================================
-// MODAL FUNCTIONS
+// UTILITIES
 // ====================================
 
-function openTaskModal() {
-    document.getElementById('taskModal').classList.add('active');
-    document.querySelector('#taskModal input[name="title"]').focus();
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1];
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+}
+
+function isTyping() {
+    const a = document.activeElement;
+    return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
+}
+
+function pluralize(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m100 >= 11 && m100 <= 19) return many;
+    if (m10 === 1) return one;
+    if (m10 >= 2 && m10 <= 4) return few;
+    return many;
+}
+
+async function apiFetch(url, opts = {}) {
+    const defaults = {
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    };
+    if (opts.body && typeof opts.body === 'string') {
+        defaults.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+    const merged = { ...defaults, ...opts, headers: { ...defaults.headers, ...opts.headers } };
+    const res = await fetch(url, merged);
+    return res.json();
+}
+
+// ====================================
+// TOAST NOTIFICATIONS
+// ====================================
+
+const toastQueue = [];
+let toastContainer = null;
+
+function ensureToastContainer() {
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+    return toastContainer;
+}
+
+function showToast(message, type = 'success', duration = 3000) {
+    const container = ensureToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    const icons = {
+        success: 'ri-check-line',
+        error: 'ri-error-warning-line',
+        info: 'ri-information-line',
+        warning: 'ri-alarm-warning-line',
+    };
+
+    toast.innerHTML = `
+        <i class="${icons[type] || icons.info}"></i>
+        <span>${message}</span>
+        <button class="toast-close" onclick="this.closest('.toast').remove()">
+            <i class="ri-close-line"></i>
+        </button>
+    `;
+
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+// ====================================
+// MODAL FUNCTIONS (with AJAX submit)
+// ====================================
+
+function openTaskModal(defaults = {}) {
+    const modal = document.getElementById('taskModal');
+    modal.classList.add('active');
+    const form = document.getElementById('taskForm');
+
+    if (defaults.project) {
+        const sel = form.querySelector('select[name="project"]');
+        if (sel) sel.value = defaults.project;
+    }
+    if (defaults.due_date) {
+        const inp = form.querySelector('input[name="due_date"]');
+        if (inp) inp.value = defaults.due_date;
+    }
+
+    setTimeout(() => form.querySelector('input[name="title"]')?.focus(), 100);
 }
 
 function closeTaskModal() {
@@ -19,31 +121,28 @@ function closeTaskModal() {
 
 function openProjectModal() {
     document.getElementById('projectModal').classList.add('active');
-    document.querySelector('#projectModal input[name="name"]').focus();
+    setTimeout(() => document.querySelector('#projectModal input[name="name"]')?.focus(), 100);
 }
 
 function closeProjectModal() {
     document.getElementById('projectModal').classList.remove('active');
     document.getElementById('projectForm').reset();
-    // Reset hex input to default
-    const hexInput = document.getElementById('projectColorHex');
-    if (hexInput) hexInput.value = '#7C3AED';
+    const hex = document.getElementById('projectColorHex');
+    if (hex) hex.value = '#7C3AED';
 }
 
 function openTagModal() {
     document.getElementById('tagModal').classList.add('active');
-    document.querySelector('#tagModal input[name="name"]').focus();
+    setTimeout(() => document.querySelector('#tagModal input[name="name"]')?.focus(), 100);
 }
 
 function closeTagModal() {
     document.getElementById('tagModal').classList.remove('active');
     document.getElementById('tagForm').reset();
-    // Reset hex input to default
-    const hexInput = document.getElementById('tagColorHex');
-    if (hexInput) hexInput.value = '#7C3AED';
+    const hex = document.getElementById('tagColorHex');
+    if (hex) hex.value = '#7C3AED';
 }
 
-// Close modals on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeTaskModal();
@@ -52,176 +151,347 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// AJAX form handlers
+document.addEventListener('DOMContentLoaded', () => {
+    // Task form
+    const taskForm = document.getElementById('taskForm');
+    if (taskForm) {
+        taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(taskForm);
+            const body = new URLSearchParams(fd).toString();
+            try {
+                const data = await apiFetch(taskForm.action, { method: 'POST', body });
+                if (data.success) {
+                    closeTaskModal();
+                    showToast('Задача создана');
+                    if (data.html) {
+                        insertTaskIntoDOM(data.html, data.id);
+                    } else {
+                        softReloadContent();
+                    }
+                    updateSidebarCounts();
+                }
+            } catch (err) {
+                showToast('Ошибка при создании задачи', 'error');
+            }
+        });
+    }
+
+    // Project form
+    const projectForm = document.getElementById('projectForm');
+    if (projectForm) {
+        projectForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(projectForm);
+            const body = new URLSearchParams(fd).toString();
+            try {
+                const data = await apiFetch(projectForm.action, { method: 'POST', body });
+                if (data.success) {
+                    closeProjectModal();
+                    showToast('Проект создан');
+                    addProjectToSidebar(data);
+                    if (window.location.pathname === '/projects/') {
+                        softReloadContent();
+                    }
+                }
+            } catch (err) {
+                showToast('Ошибка при создании проекта', 'error');
+            }
+        });
+    }
+
+    // Tag form
+    const tagForm = document.getElementById('tagForm');
+    if (tagForm) {
+        tagForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(tagForm);
+            const body = new URLSearchParams(fd).toString();
+            try {
+                const data = await apiFetch(tagForm.action, { method: 'POST', body });
+                if (data.success) {
+                    closeTagModal();
+                    showToast('Тег создан');
+                    addTagToSidebar(data);
+                    if (window.location.pathname === '/tags/') {
+                        softReloadContent();
+                    }
+                }
+            } catch (err) {
+                showToast('Ошибка при создании тега', 'error');
+            }
+        });
+    }
+});
+
+function addProjectToSidebar(project) {
+    const navSections = document.querySelectorAll('.nav-section');
+    if (navSections.length < 2) return;
+    const projectsSection = navSections[1];
+    const emptyLink = projectsSection.querySelector('.nav-empty-link');
+    if (emptyLink) emptyLink.remove();
+
+    const a = document.createElement('a');
+    a.href = `/projects/${project.id}/`;
+    a.className = 'nav-item';
+    a.innerHTML = `
+        <span class="project-dot" style="background-color: ${project.color || '#7C3AED'}"></span>
+        <span>${escapeHtml(project.name)}</span>
+    `;
+    a.style.animation = 'slideUp 0.3s ease';
+    const header = projectsSection.querySelector('.nav-section-header');
+    if (header) header.insertAdjacentElement('afterend', a);
+}
+
+function addTagToSidebar(tag) {
+    const navSections = document.querySelectorAll('.nav-section');
+    if (navSections.length < 3) return;
+    const tagsSection = navSections[2];
+    const emptyP = tagsSection.querySelector('.nav-empty');
+    if (emptyP) emptyP.remove();
+
+    const a = document.createElement('a');
+    a.href = `/?tag=${tag.id}`;
+    a.className = 'nav-item nav-tag';
+    a.innerHTML = `
+        <span class="tag-dot" style="background-color: ${tag.color || '#7C3AED'}"></span>
+        <span>${escapeHtml(tag.name)}</span>
+    `;
+    a.style.animation = 'slideUp 0.3s ease';
+    tagsSection.appendChild(a);
+}
+
 // ====================================
-// COLOR PICKER FUNCTIONS
+// COLOR PICKER
 // ====================================
 
 function syncColorHex(colorInput, hexInputId) {
-    const hexInput = document.getElementById(hexInputId);
-    if (hexInput) {
-        hexInput.value = colorInput.value.toUpperCase();
-    }
+    const hex = document.getElementById(hexInputId);
+    if (hex) hex.value = colorInput.value.toUpperCase();
 }
 
 function syncHexColor(hexInput, colorInputId) {
     const colorInput = document.getElementById(colorInputId);
-    let value = hexInput.value;
-    
-    // Add # if missing
-    if (value && !value.startsWith('#')) {
-        value = '#' + value;
-        hexInput.value = value;
-    }
-    
-    // Validate and apply
-    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
-        colorInput.value = value;
-    }
+    let v = hexInput.value;
+    if (v && !v.startsWith('#')) { v = '#' + v; hexInput.value = v; }
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) colorInput.value = v;
 }
 
 function setColor(color, colorInputId, hexInputId) {
-    const colorInput = document.getElementById(colorInputId);
-    const hexInput = document.getElementById(hexInputId);
-    
-    if (colorInput) colorInput.value = color;
-    if (hexInput) hexInput.value = color.toUpperCase();
+    const ci = document.getElementById(colorInputId);
+    const hi = document.getElementById(hexInputId);
+    if (ci) ci.value = color;
+    if (hi) hi.value = color.toUpperCase();
 }
 
 // ====================================
 // TASK FUNCTIONS
 // ====================================
 
-function toggleTask(taskId) {
-    fetch(`/tasks/${taskId}/toggle/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
+async function toggleTask(taskId) {
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/toggle/`, { method: 'POST' });
         if (data.success) {
-            const taskItem = document.querySelector(`.task-item[data-id="${taskId}"]`);
-            if (taskItem) {
-                taskItem.classList.toggle('completed', data.is_completed);
-                
-                // Animate the task out if completed
+            const item = document.querySelector(`.task-item[data-id="${taskId}"]`);
+            if (item) {
                 if (data.is_completed) {
-                    taskItem.style.animation = 'fadeOut 0.3s ease forwards';
+                    item.classList.add('completed');
+                    item.style.transition = 'all 0.4s ease';
+                    item.style.opacity = '0';
+                    item.style.transform = 'translateX(-30px) scale(0.95)';
                     setTimeout(() => {
-                        taskItem.style.display = 'none';
-                        updateTaskCounts();
+                        item.style.maxHeight = item.offsetHeight + 'px';
+                        requestAnimationFrame(() => {
+                            item.style.maxHeight = '0';
+                            item.style.padding = '0 16px';
+                            item.style.margin = '0';
+                            item.style.overflow = 'hidden';
+                        });
+                        setTimeout(() => item.remove(), 300);
                     }, 300);
+                    showToast('Задача завершена! ✓', 'success');
+                } else {
+                    item.classList.remove('completed');
+                    showToast('Задача возвращена', 'info');
                 }
+                updateSidebarCounts();
             }
+            // Calendar kanban update
+            if (window.kanbanCalendar) window.kanbanCalendar.reload();
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
 }
 
-function deleteTask(taskId) {
-    if (!confirm('Удалить эту задачу?')) return;
-    
-    fetch(`/tasks/${taskId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
+async function deleteTask(taskId) {
+    if (!confirm('Удалить задачу?')) return;
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/delete/`, { method: 'POST' });
         if (data.success) {
-            const taskItem = document.querySelector(`.task-item[data-id="${taskId}"]`);
-            if (taskItem) {
-                taskItem.style.animation = 'fadeOut 0.3s ease forwards';
-                setTimeout(() => {
-                    taskItem.remove();
-                    updateTaskCounts();
-                }, 300);
+            const item = document.querySelector(`.task-item[data-id="${taskId}"]`);
+            if (item) {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-40px)';
+                setTimeout(() => item.remove(), 300);
+            }
+            showToast('Задача удалена');
+            updateSidebarCounts();
+
+            // If on task detail page, go back
+            if (window.location.pathname.match(/^\/tasks\/\d+\/$/)) {
+                setTimeout(() => { window.location.href = '/'; }, 500);
             }
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) {
+        showToast('Ошибка при удалении', 'error');
+    }
+}
+
+function insertTaskIntoDOM(html, taskId) {
+    const list = document.querySelector('.task-list');
+    if (!list) { softReloadContent(); return; }
+
+    const temp = document.createElement('div');
+    temp.innerHTML = html.trim();
+    const newItem = temp.firstElementChild;
+    if (newItem) {
+        newItem.style.opacity = '0';
+        newItem.style.transform = 'translateY(-10px)';
+        list.prepend(newItem);
+        requestAnimationFrame(() => {
+            newItem.style.transition = 'all 0.3s ease';
+            newItem.style.opacity = '1';
+            newItem.style.transform = 'translateY(0)';
+        });
+
+        // Update count
+        const countEl = document.querySelector('.task-section-count');
+        if (countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
+    }
+
+    // Hide empty state
+    const empty = document.querySelector('.empty-state');
+    if (empty) empty.style.display = 'none';
 }
 
 // ====================================
-// CHECKLIST FUNCTIONS
+// QUICK ADD TASK (NO RELOAD)
 // ====================================
 
-function addChecklistItem(taskId) {
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('quickAddInput');
+    if (input) {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); quickAddTask(); }
+        });
+    }
+});
+
+async function quickAddTask() {
+    const input = document.getElementById('quickAddInput');
+    const title = input.value.trim();
+    if (!title) return;
+
+    const projectId = input.dataset.project || '';
+    const dueDate = input.dataset.dueDate || '';
+
+    input.disabled = true;
+
+    try {
+        const params = new URLSearchParams({ title });
+        if (projectId) params.set('project', projectId);
+        if (dueDate) params.set('due_date', dueDate);
+
+        const data = await apiFetch('/tasks/create/', { method: 'POST', body: params.toString() });
+        if (data.success) {
+            input.value = '';
+            showToast('Задача добавлена');
+            if (data.html) {
+                insertTaskIntoDOM(data.html, data.id);
+            } else {
+                softReloadContent();
+            }
+            updateSidebarCounts();
+        }
+    } catch (err) {
+        showToast('Ошибка при добавлении', 'error');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+// ====================================
+// CHECKLIST FUNCTIONS (fixed)
+// ====================================
+
+async function addChecklistItem(taskId) {
     const input = document.getElementById('checklistInput');
     const text = input.value.trim();
-    
     if (!text) return;
-    
-    fetch(`/tasks/${taskId}/checklist/add/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: `text=${encodeURIComponent(text)}`,
-    })
-    .then(response => response.json())
-    .then(data => {
+
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/checklist/add/`, {
+            method: 'POST',
+            body: `text=${encodeURIComponent(text)}`,
+        });
         if (data.success) {
             const checklist = document.querySelector('.checklist');
             const newItem = createChecklistItemElement(data.id, data.text);
             checklist.insertBefore(newItem, document.querySelector('.checklist-add'));
             input.value = '';
-            updateChecklistProgress();
+            // Animate in
+            newItem.style.opacity = '0';
+            newItem.style.transform = 'translateX(-10px)';
+            requestAnimationFrame(() => {
+                newItem.style.transition = 'all 0.3s ease';
+                newItem.style.opacity = '1';
+                newItem.style.transform = 'translateX(0)';
+            });
+            // Refresh progress
+            refreshChecklistProgress(taskId);
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
 }
 
-function toggleChecklistItem(itemId) {
-    fetch(`/checklist/${itemId}/toggle/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
+async function toggleChecklistItem(itemId) {
+    try {
+        const data = await apiFetch(`/checklist/${itemId}/toggle/`, { method: 'POST' });
+        if (data.success) {
+            const item = document.querySelector(`.checklist-item[data-id="${itemId}"]`);
+            if (item) item.classList.toggle('completed', data.is_completed);
+            if (data.progress) updateChecklistProgressBar(data.progress);
+        }
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+async function deleteChecklistItem(itemId) {
+    try {
+        const data = await apiFetch(`/checklist/${itemId}/delete/`, { method: 'POST' });
         if (data.success) {
             const item = document.querySelector(`.checklist-item[data-id="${itemId}"]`);
             if (item) {
-                item.classList.toggle('completed', data.is_completed);
+                item.style.transition = 'all 0.2s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-20px)';
+                setTimeout(() => item.remove(), 200);
             }
-            if (data.progress) {
-                updateChecklistProgressBar(data.progress);
-            }
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
-
-function deleteChecklistItem(itemId) {
-    fetch(`/checklist/${itemId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const item = document.querySelector(`.checklist-item[data-id="${itemId}"]`);
-            if (item) {
-                item.remove();
-            }
-            if (data.progress) {
-                updateChecklistProgressBar(data.progress);
+            if (data.progress) updateChecklistProgressBar(data.progress);
+            else {
+                const bar = document.querySelector('.task-checklist-progress');
+                if (bar) bar.style.display = 'none';
             }
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
 }
 
 function createChecklistItemElement(id, text) {
@@ -244,11 +514,16 @@ function createChecklistItemElement(id, text) {
 function updateChecklistProgressBar(progress) {
     const bar = document.querySelector('.progress-bar-fill');
     const text = document.querySelector('.checklist-progress-text');
-    if (bar) {
-        bar.style.width = `${progress.percent}%`;
-    }
-    if (text) {
-        text.textContent = `${progress.completed}/${progress.total}`;
+    if (bar) bar.style.width = `${progress.percent}%`;
+    if (text) text.textContent = `${progress.completed}/${progress.total}`;
+}
+
+function refreshChecklistProgress(taskId) {
+    const items = document.querySelectorAll('.checklist-item');
+    const total = items.length;
+    const completed = document.querySelectorAll('.checklist-item.completed').length;
+    if (total > 0) {
+        updateChecklistProgressBar({ completed, total, percent: Math.round(completed / total * 100) });
     }
 }
 
@@ -256,124 +531,136 @@ function updateChecklistProgressBar(progress) {
 // PROJECT FUNCTIONS
 // ====================================
 
-function deleteProject(projectId) {
-    if (!confirm('Удалить этот проект? Все задачи проекта также будут удалены.')) return;
-    
-    fetch(`/projects/${projectId}/delete/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    })
-    .then(response => response.json())
-    .then(data => {
+async function deleteProject(projectId) {
+    if (!confirm('Удалить проект? Все задачи тоже будут удалены.')) return;
+    try {
+        const data = await apiFetch(`/projects/${projectId}/delete/`, { method: 'POST' });
         if (data.success) {
+            showToast('Проект удалён');
             window.location.href = '/projects/';
         }
-    })
-    .catch(error => console.error('Error:', error));
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+async function archiveProject(projectId) {
+    try {
+        const data = await apiFetch(`/projects/${projectId}/edit/`, {
+            method: 'POST', body: 'is_archived=true',
+        });
+        if (data.success) {
+            const item = document.querySelector(`.project-list-item[data-id="${projectId}"]`);
+            if (item) {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-30px)';
+                setTimeout(() => { item.remove(); softReloadContent(); }, 300);
+            }
+            showToast('Проект архивирован');
+        }
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+async function restoreProject(projectId) {
+    try {
+        const data = await apiFetch(`/projects/${projectId}/restore/`, { method: 'POST' });
+        if (data.success) {
+            const item = document.querySelector(`.project-list-item[data-id="${projectId}"]`);
+            if (item) {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '0';
+                setTimeout(() => { item.remove(); softReloadContent(); }, 300);
+            }
+            showToast('Проект восстановлен');
+        }
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+async function deleteProjectPermanent(projectId) {
+    if (!confirm('Удалить проект навсегда? Все задачи тоже будут удалены.')) return;
+    try {
+        const data = await apiFetch(`/projects/${projectId}/delete/`, { method: 'POST' });
+        if (data.success) {
+            const item = document.querySelector(`.project-list-item[data-id="${projectId}"]`);
+            if (item) {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'scale(0.9)';
+                setTimeout(() => item.remove(), 300);
+            }
+            showToast('Проект удалён');
+        }
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
 }
 
 // ====================================
-// COLOR PICKER
+// TAG FUNCTIONS
 // ====================================
 
-document.querySelectorAll('.color-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const color = btn.dataset.color;
-        const colorInput = btn.closest('.color-picker').querySelector('.color-input');
-        colorInput.value = color;
-        
-        // Update active state
-        btn.closest('.color-presets').querySelectorAll('.color-preset').forEach(b => {
-            b.classList.remove('active');
-        });
-        btn.classList.add('active');
+async function deleteTag(tagId) {
+    if (!confirm('Удалить тег?')) return;
+    try {
+        const data = await apiFetch(`/tags/${tagId}/delete/`, { method: 'POST' });
+        if (data.success) {
+            const card = document.querySelector(`.tag-card[data-id="${tagId}"]`);
+            if (card) {
+                card.style.transition = 'all 0.3s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.9)';
+                setTimeout(() => card.remove(), 300);
+            }
+            showToast('Тег удалён');
+        }
+    } catch (err) {
+        showToast('Ошибка', 'error');
+    }
+}
+
+// ====================================
+// SEARCH (debounced client-side)
+// ====================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) return;
+
+    let timeout;
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            const q = e.target.value.trim().toLowerCase();
+            if (q.length >= 2) {
+                filterTasks(q);
+            } else if (q.length === 0) {
+                showAllTasks();
+            }
+        }, 200);
     });
 });
 
-// ====================================
-// SEARCH
-// ====================================
-
-const searchInput = document.getElementById('searchInput');
-if (searchInput) {
-    let searchTimeout;
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            const query = e.target.value.trim();
-            if (query.length >= 2) {
-                filterTasks(query);
-            } else if (query.length === 0) {
-                showAllTasks();
-            }
-        }, 300);
-    });
-}
-
 function filterTasks(query) {
-    const tasks = document.querySelectorAll('.task-item');
-    const lowerQuery = query.toLowerCase();
-    
-    tasks.forEach(task => {
-        const title = task.querySelector('.task-title').textContent.toLowerCase();
-        const description = task.querySelector('.task-description')?.textContent.toLowerCase() || '';
-        
-        if (title.includes(lowerQuery) || description.includes(lowerQuery)) {
-            task.style.display = '';
-        } else {
-            task.style.display = 'none';
-        }
+    document.querySelectorAll('.task-item').forEach(task => {
+        const title = task.querySelector('.task-title')?.textContent.toLowerCase() || '';
+        const desc = task.querySelector('.task-description')?.textContent.toLowerCase() || '';
+        const match = title.includes(query) || desc.includes(query);
+        task.style.display = match ? '' : 'none';
+        task.style.transition = 'opacity 0.2s ease';
+        task.style.opacity = match ? '1' : '0';
     });
 }
 
 function showAllTasks() {
     document.querySelectorAll('.task-item').forEach(task => {
         task.style.display = '';
+        task.style.opacity = '1';
     });
-}
-
-// ====================================
-// QUICK ADD TASK
-// ====================================
-
-const quickAddInput = document.getElementById('quickAddInput');
-if (quickAddInput) {
-    quickAddInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            quickAddTask();
-        }
-    });
-}
-
-function quickAddTask() {
-    const input = document.getElementById('quickAddInput');
-    const title = input.value.trim();
-    
-    if (!title) return;
-    
-    const projectId = input.dataset.project || '';
-    
-    fetch('/tasks/create/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: `title=${encodeURIComponent(title)}&project=${projectId}`,
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Reload page to show new task
-            window.location.reload();
-        }
-    })
-    .catch(error => console.error('Error:', error));
 }
 
 // ====================================
@@ -381,48 +668,10 @@ function quickAddTask() {
 // ====================================
 
 document.addEventListener('keydown', (e) => {
-    // N - New task
-    if (e.key === 'n' && !isTyping()) {
-        e.preventDefault();
-        openTaskModal();
-    }
-    
-    // P - New project
-    if (e.key === 'p' && !isTyping()) {
-        e.preventDefault();
-        openProjectModal();
-    }
-    
-    // / - Focus search
-    if (e.key === '/' && !isTyping()) {
-        e.preventDefault();
-        document.getElementById('searchInput')?.focus();
-    }
+    if (e.key === 'n' && !isTyping()) { e.preventDefault(); openTaskModal(); }
+    if (e.key === 'p' && !isTyping()) { e.preventDefault(); openProjectModal(); }
+    if (e.key === '/' && !isTyping()) { e.preventDefault(); document.getElementById('searchInput')?.focus(); }
 });
-
-function isTyping() {
-    const active = document.activeElement;
-    return active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable;
-}
-
-// ====================================
-// UTILITY FUNCTIONS
-// ====================================
-
-function getCSRFToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
-           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function updateTaskCounts() {
-    // Could implement AJAX call to update sidebar counts
-}
 
 // ====================================
 // TASK CHECKBOX EVENT DELEGATION
@@ -430,232 +679,168 @@ function updateTaskCounts() {
 
 document.addEventListener('change', (e) => {
     if (e.target.matches('.task-item .task-checkbox input')) {
-        const taskItem = e.target.closest('.task-item');
-        const taskId = taskItem.dataset.id;
-        toggleTask(taskId);
+        const taskId = e.target.closest('.task-item')?.dataset.id;
+        if (taskId) toggleTask(taskId);
     }
 });
 
 // ====================================
-// CALENDAR
+// SIDEBAR COUNTS UPDATE
 // ====================================
 
-class ScopeCalendar {
-    constructor(container) {
-        this.container = container;
-        this.currentDate = new Date();
-        this.selectedDate = null;
-        this.events = [];
-        
-        this.init();
-    }
-    
-    // Форматирует дату в YYYY-MM-DD без проблем с часовым поясом
-    formatDateStr(year, month, day) {
-        const m = String(month + 1).padStart(2, '0');
-        const d = String(day).padStart(2, '0');
-        return `${year}-${m}-${d}`;
-    }
-    
-    // Получает сегодняшнюю дату в формате YYYY-MM-DD
-    getTodayStr() {
-        const today = new Date();
-        return this.formatDateStr(today.getFullYear(), today.getMonth(), today.getDate());
-    }
-    
-    async init() {
-        await this.loadEvents();
-        this.render();
-    }
-    
-    async loadEvents() {
-        const year = this.currentDate.getFullYear();
-        const month = this.currentDate.getMonth();
-        const start = this.formatDateStr(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0).getDate();
-        const end = this.formatDateStr(year, month, lastDay);
-        
-        try {
-            const response = await fetch(`/api/calendar-events/?start=${start}&end=${end}`);
-            this.events = await response.json();
-        } catch (error) {
-            console.error('Error loading calendar events:', error);
+async function updateSidebarCounts() {
+    try {
+        const data = await apiFetch('/api/stats/');
+        // Update "Все задачи" badge
+        const allBadge = document.querySelector('.nav-item[href="/"] .badge, .sidebar-nav .nav-section:first-child .nav-item:first-child .badge');
+        if (allBadge) allBadge.textContent = data.total_active;
+
+        // Update "Сегодня" badge
+        const todayBadge = document.querySelector('.nav-item[href="/today/"] .badge, .sidebar-nav .nav-section:first-child .nav-item:nth-child(2) .badge');
+        if (todayBadge) {
+            todayBadge.textContent = data.today_tasks;
+            if (!data.today_tasks) todayBadge.style.display = 'none';
+            else todayBadge.style.display = '';
         }
-    }
-    
-    render() {
-        const year = this.currentDate.getFullYear();
-        const month = this.currentDate.getMonth();
-        
-        const monthNames = [
-            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-        ];
-        
-        const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-        
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        
-        // Get the day of week (0-6, where 0 is Sunday)
-        let startDay = firstDay.getDay();
-        // Convert to Monday-first (0 = Monday)
-        startDay = startDay === 0 ? 6 : startDay - 1;
-        
-        const todayStr = this.getTodayStr();
-        
-        let html = `
-            <div class="calendar-header">
-                <h2 class="calendar-title">${monthNames[month]} ${year}</h2>
-                <div class="calendar-nav">
-                    <button class="btn-icon" onclick="calendar.prevMonth()">
-                        <i class="ri-arrow-left-s-line"></i>
-                    </button>
-                    <button class="btn btn-ghost btn-sm" onclick="calendar.goToToday()">Сегодня</button>
-                    <button class="btn-icon" onclick="calendar.nextMonth()">
-                        <i class="ri-arrow-right-s-line"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="calendar-grid">
-        `;
-        
-        // Day headers
-        dayNames.forEach(day => {
-            html += `<div class="calendar-day-header">${day}</div>`;
-        });
-        
-        // Previous month days
-        const prevMonthLastDay = new Date(year, month, 0);
-        for (let i = startDay - 1; i >= 0; i--) {
-            const day = prevMonthLastDay.getDate() - i;
-            html += `<div class="calendar-day other-month"><span class="calendar-day-number">${day}</span></div>`;
-        }
-        
-        // Current month days
-        for (let day = 1; day <= lastDay.getDate(); day++) {
-            const dateStr = this.formatDateStr(year, month, day);
-            const isToday = dateStr === todayStr;
-            const isSelected = dateStr === this.selectedDate;
-            const dayEvents = this.events.filter(e => e.start === dateStr);
-            
-            let dayClass = 'calendar-day';
-            if (isToday) dayClass += ' today';
-            if (isSelected) dayClass += ' selected';
-            
-            html += `
-                <div class="${dayClass}" onclick="calendar.selectDate('${dateStr}')">
-                    <span class="calendar-day-number">${day}</span>
-                    ${dayEvents.length > 0 ? `
-                        <div class="calendar-day-tasks">
-                            ${dayEvents.slice(0, 3).map(e => `<span class="calendar-day-dot" style="background: ${e.color}"></span>`).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-        
-        // Next month days
-        const totalCells = startDay + lastDay.getDate();
-        const rows = Math.ceil(totalCells / 7);
-        const remainingCells = (rows * 7) - totalCells;
-        for (let day = 1; day <= remainingCells; day++) {
-            html += `<div class="calendar-day other-month"><span class="calendar-day-number">${day}</span></div>`;
-        }
-        
-        html += '</div>';
-        
-        // Events list for selected date or today
-        const selectedDateStr = this.selectedDate || todayStr;
-        const selectedEvents = this.events.filter(e => e.start === selectedDateStr);
-        
-        // Показываем секцию событий даже если пусто при выбранной дате
-        html += `
-            <div class="calendar-events">
-                <h3 class="task-section-title">Задачи на ${this.formatDisplayDate(selectedDateStr)}</h3>
-                ${selectedEvents.length > 0 ? `
-                    <div class="task-list">
-                        ${selectedEvents.map(e => `
-                            <a href="${e.url}" class="task-item ${e.completed ? 'completed' : ''}" style="border-left: 3px solid ${e.color}">
-                                <div class="task-content">
-                                    <span class="task-title">${e.title}</span>
-                                </div>
-                            </a>
-                        `).join('')}
-                    </div>
-                ` : `
-                    <p class="calendar-no-events">Нет задач на этот день</p>
-                `}
-            </div>
-        `;
-        
-        this.container.innerHTML = html;
-    }
-    
-    formatDisplayDate(dateStr) {
-        // Парсим строку YYYY-MM-DD напрямую
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                       'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-        return `${day} ${months[month - 1]}`;
-    }
-    
-    prevMonth() {
-        this.currentDate.setMonth(this.currentDate.getMonth() - 1);
-        this.selectedDate = null;
-        this.init();
-    }
-    
-    nextMonth() {
-        this.currentDate.setMonth(this.currentDate.getMonth() + 1);
-        this.selectedDate = null;
-        this.init();
-    }
-    
-    goToToday() {
-        this.currentDate = new Date();
-        this.selectedDate = null;
-        this.init();
-    }
-    
-    selectDate(dateStr) {
-        this.selectedDate = dateStr;
-        this.render();
+
+        // Update stats widget if present
+        if (window.updateStatsWidget) window.updateStatsWidget(data);
+    } catch (err) {
+        // silent fail
     }
 }
 
-// Calendar is initialized in the template that uses it
-// Variable 'calendar' is set on window object in the template
+// ====================================
+// SOFT RELOAD CONTENT
+// ====================================
+
+async function softReloadContent() {
+    try {
+        const response = await fetch(window.location.href, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newContent = doc.querySelector('.content-body');
+        const currentContent = document.querySelector('.content-body');
+
+        if (newContent && currentContent) {
+            currentContent.style.opacity = '0';
+            currentContent.style.transition = 'opacity 0.15s ease';
+            setTimeout(() => {
+                currentContent.innerHTML = newContent.innerHTML;
+                currentContent.style.opacity = '1';
+                // Re-init quick add
+                const input = document.getElementById('quickAddInput');
+                if (input) {
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); quickAddTask(); }
+                    });
+                }
+            }, 150);
+        }
+    } catch (err) {
+        window.location.reload();
+    }
+}
+
+// ====================================
+// STATS / MOTIVATION WIDGET
+// ====================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    const widget = document.getElementById('statsWidget');
+    if (widget) loadStatsWidget();
+});
+
+async function loadStatsWidget() {
+    try {
+        const data = await apiFetch('/api/stats/');
+        renderStatsWidget(data);
+    } catch (err) { /* silent */ }
+}
+
+function renderStatsWidget(data) {
+    const widget = document.getElementById('statsWidget');
+    if (!widget) return;
+
+    const streakEmoji = data.streak >= 7 ? '🔥' : data.streak >= 3 ? '⚡' : '✨';
+    const motivations = [
+        'Каждая завершённая задача — шаг к цели',
+        'Маленькие шаги ведут к большим результатам',
+        'Фокус — ключ к продуктивности',
+        'Ты на верном пути!',
+        'Сегодня отличный день для свершений',
+        'Дисциплина — это свобода',
+        'Делай то, что важно прямо сейчас',
+    ];
+    const quote = motivations[new Date().getDay()];
+
+    widget.innerHTML = `
+        <div class="stats-cards">
+            <div class="stat-card stat-streak">
+                <div class="stat-icon">${streakEmoji}</div>
+                <div class="stat-info">
+                    <span class="stat-number">${data.streak}</span>
+                    <span class="stat-label">${pluralize(data.streak, 'день', 'дня', 'дней')} подряд</span>
+                </div>
+            </div>
+            <div class="stat-card stat-today-done">
+                <div class="stat-icon"><i class="ri-check-double-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-number">${data.completed_today}</span>
+                    <span class="stat-label">сегодня</span>
+                </div>
+            </div>
+            <div class="stat-card stat-week-done">
+                <div class="stat-icon"><i class="ri-bar-chart-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-number">${data.completed_this_week}</span>
+                    <span class="stat-label">за неделю</span>
+                </div>
+            </div>
+            ${data.overdue > 0 ? `
+            <div class="stat-card stat-overdue">
+                <div class="stat-icon"><i class="ri-alarm-warning-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-number">${data.overdue}</span>
+                    <span class="stat-label">просрочено</span>
+                </div>
+            </div>` : ''}
+        </div>
+        <div class="stats-quote">
+            <i class="ri-lightbulb-flash-line"></i>
+            <span>${quote}</span>
+        </div>
+    `;
+    widget.style.animation = 'slideUp 0.4s ease';
+
+    window.updateStatsWidget = (newData) => renderStatsWidget(newData);
+}
 
 // ====================================
 // CSS ANIMATION HELPERS
 // ====================================
 
-// Add fadeOut animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeOut {
-        from { opacity: 1; transform: translateX(0); }
-        to { opacity: 0; transform: translateX(-20px); }
-    }
+const animStyle = document.createElement('style');
+animStyle.textContent = `
+    @keyframes fadeOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-20px); } }
+    @keyframes slideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
 `;
-document.head.appendChild(style);
+document.head.appendChild(animStyle);
 
 // ====================================
 // MOBILE MENU
 // ====================================
 
 function toggleSidebar() {
-    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar')?.classList.toggle('open');
 }
 
-// Close sidebar when clicking outside on mobile
 document.addEventListener('click', (e) => {
     const sidebar = document.querySelector('.sidebar');
-    if (window.innerWidth <= 1024 && 
-        sidebar.classList.contains('open') && 
-        !sidebar.contains(e.target)) {
+    if (window.innerWidth <= 1024 && sidebar?.classList.contains('open') && !sidebar.contains(e.target)) {
         sidebar.classList.remove('open');
     }
 });
-

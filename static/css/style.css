@@ -389,6 +389,12 @@ input, textarea, select {
     z-index: 50;
 }
 
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .page-title {
     font-size: 24px;
     font-weight: 600;
@@ -874,141 +880,391 @@ input, textarea, select {
 }
 
 /* ====================================
-   CALENDAR
+   CALENDAR (legacy small calendar)
    ==================================== */
-
-.calendar-container {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-}
-
-.calendar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-}
-
-.calendar-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.calendar-nav {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
 
 .btn-sm {
     padding: 6px 12px;
     font-size: 12px;
 }
 
-.calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
+/* ====================================
+   KANBAN CALENDAR
+   ==================================== */
+
+.kanban-calendar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-.calendar-day-header {
+.kanban-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.kanban-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kanban-month-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 180px;
     text-align: center;
-    padding: 6px 4px;
+}
+
+.kanban-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.kanban-weeks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.kanban-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    gap: 12px;
+}
+
+.kanban-loading i { font-size: 28px; }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Week */
+.kanban-week {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all var(--transition-normal);
+}
+
+.kanban-week.has-today {
+    border-color: rgba(124, 58, 237, 0.3);
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.08);
+}
+
+.kanban-week-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    user-select: none;
+}
+
+.kanban-week-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.kanban-week-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kanban-chevron {
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: transform 0.3s ease;
+}
+
+.kanban-week.expanded .kanban-chevron {
+    transform: rotate(90deg);
+}
+
+.kanban-week-label {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.kanban-today-badge {
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kanban-week-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.kanban-week-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    padding: 3px 10px;
+    border-radius: 10px;
+}
+
+.kanban-week-done {
+    font-size: 12px;
+    color: var(--priority-low);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Week body */
+.kanban-week-body {
+    border-top: 1px solid var(--border-light);
+}
+
+.kanban-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    min-height: 140px;
+}
+
+.kanban-day {
+    border-right: 1px solid var(--border-light);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 140px;
+    transition: background var(--transition-fast);
+    position: relative;
+}
+
+.kanban-day:last-child {
+    border-right: none;
+}
+
+.kanban-day.other-month {
+    opacity: 0.5;
+}
+
+.kanban-day.past {
+    opacity: 0.7;
+}
+
+.kanban-day.today {
+    background: rgba(124, 58, 237, 0.06);
+}
+
+.kanban-day.drag-over {
+    background: rgba(124, 58, 237, 0.12);
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
+    border-radius: 4px;
+}
+
+.kanban-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.kanban-day-name {
     font-size: 11px;
     font-weight: 500;
     color: var(--text-muted);
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.calendar-day {
-    aspect-ratio: 1;
-    padding: 4px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 36px;
+.kanban-day-num {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
 }
 
-.calendar-day:hover {
-    background: var(--bg-tertiary);
-}
-
-.calendar-day.today {
+.kanban-day-num.today-num {
     background: var(--accent-primary);
     color: white;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
 }
 
-.calendar-day.today:hover {
-    background: var(--accent-primary-hover);
+.kanban-day-tasks {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 30px;
 }
 
-.calendar-day.selected {
+/* Task card in kanban */
+.kanban-task {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    cursor: grab;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.kanban-task:hover {
     background: var(--bg-elevated);
-    box-shadow: inset 0 0 0 2px var(--accent-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
-.calendar-day.today.selected {
-    background: var(--accent-primary);
-}
-
-.calendar-day.other-month {
-    color: var(--text-muted);
+.kanban-task.dragging {
     opacity: 0.4;
+    transform: rotate(2deg);
 }
 
-.calendar-day-number {
+.kanban-task.completed {
+    opacity: 0.5;
+}
+
+.kanban-task.completed .kanban-task-title {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.kanban-task.overdue:not(.completed) {
+    border-left: 2px solid var(--priority-urgent);
+}
+
+.kanban-task-priority {
+    width: 3px;
+    min-height: 16px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.kanban-task-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.kanban-task-title {
     font-size: 12px;
     font-weight: 500;
+    color: var(--text-primary);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: none;
 }
 
-.calendar-day-tasks {
+.kanban-task-title:hover {
+    color: var(--accent-secondary);
+}
+
+.kanban-task-meta {
     display: flex;
-    gap: 2px;
-    margin-top: 2px;
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 100%;
-}
-
-.calendar-day-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--accent-secondary);
-    flex-shrink: 0;
-}
-
-.calendar-events {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-light);
-}
-
-.calendar-events .task-section-title {
-    margin-bottom: 12px;
-}
-
-.calendar-events .task-list {
     gap: 6px;
-}
-
-.calendar-events .task-item {
-    padding: 10px 12px;
-}
-
-.calendar-no-events {
+    font-size: 10px;
     color: var(--text-muted);
-    font-size: 13px;
-    text-align: center;
-    padding: 16px;
+    margin-top: 2px;
+}
+
+.kanban-task-meta span {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.kanban-task-check {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all var(--transition-fast);
+    background: none;
+    border: none;
+    font-size: 14px;
+}
+
+.kanban-task-check:hover {
+    color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.1);
+}
+
+.kanban-task.completed .kanban-task-check {
+    color: var(--priority-low);
+}
+
+.kanban-add-btn {
+    width: 100%;
+    padding: 4px;
+    margin-top: 4px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 14px;
+    opacity: 0;
+    transition: all var(--transition-fast);
+    background: none;
+    border: 1px dashed transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kanban-day:hover .kanban-add-btn {
+    opacity: 1;
+}
+
+.kanban-add-btn:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border-color);
+    color: var(--accent-secondary);
+}
+
+@media (max-width: 1024px) {
+    .kanban-days {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .kanban-days {
+        grid-template-columns: 1fr 1fr;
+    }
+    .kanban-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .kanban-nav {
+        justify-content: center;
+    }
+    .kanban-actions {
+        justify-content: center;
+    }
 }
 
 /* ====================================
@@ -1368,6 +1624,178 @@ textarea.form-input {
 }
 
 /* ====================================
+   TOAST NOTIFICATIONS
+   ==================================== */
+
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    pointer-events: auto;
+    transform: translateX(120%);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-width: 360px;
+    backdrop-filter: blur(10px);
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast.hiding {
+    transform: translateX(120%);
+    opacity: 0;
+}
+
+.toast i:first-child {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.toast span {
+    flex: 1;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: flex;
+    transition: color var(--transition-fast);
+}
+
+.toast-close:hover {
+    color: var(--text-primary);
+}
+
+.toast-success { border-left: 3px solid var(--priority-low); }
+.toast-success i:first-child { color: var(--priority-low); }
+
+.toast-error { border-left: 3px solid var(--priority-urgent); }
+.toast-error i:first-child { color: var(--priority-urgent); }
+
+.toast-info { border-left: 3px solid var(--priority-medium); }
+.toast-info i:first-child { color: var(--priority-medium); }
+
+.toast-warning { border-left: 3px solid var(--priority-high); }
+.toast-warning i:first-child { color: var(--priority-high); }
+
+/* ====================================
+   STATS / MOTIVATION WIDGET
+   ==================================== */
+
+.stats-widget {
+    margin-bottom: 24px;
+}
+
+.stats-cards {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    flex: 1;
+    min-width: 130px;
+    transition: all var(--transition-fast);
+}
+
+.stat-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+}
+
+.stat-card .stat-icon {
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+}
+
+.stat-card .stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-card .stat-number {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.stat-card .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stat-streak .stat-icon { background: rgba(124, 58, 237, 0.15); }
+.stat-streak .stat-number { color: var(--accent-secondary); }
+
+.stat-today-done .stat-icon { color: var(--priority-low); background: rgba(34, 197, 94, 0.1); }
+.stat-today-done .stat-number { color: var(--priority-low); }
+
+.stat-week-done .stat-icon { color: var(--priority-medium); background: rgba(59, 130, 246, 0.1); }
+.stat-week-done .stat-number { color: var(--priority-medium); }
+
+.stat-overdue .stat-icon { color: var(--priority-urgent); background: rgba(239, 68, 68, 0.1); }
+.stat-overdue .stat-number { color: var(--priority-urgent); }
+
+.stats-quote {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, rgba(139, 41, 66, 0.06) 100%);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.stats-quote i {
+    font-size: 16px;
+    color: var(--accent-secondary);
+    flex-shrink: 0;
+}
+
+/* ====================================
    ANIMATIONS
    ==================================== */
 
@@ -1387,9 +1815,25 @@ textarea.form-input {
     }
 }
 
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 @keyframes pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.05); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
 }
 
 .animate-fade-in {
@@ -1405,11 +1849,16 @@ textarea.form-input {
     animation: slideUp 0.3s ease backwards;
 }
 
-.task-item:nth-child(1) { animation-delay: 0.05s; }
-.task-item:nth-child(2) { animation-delay: 0.1s; }
-.task-item:nth-child(3) { animation-delay: 0.15s; }
-.task-item:nth-child(4) { animation-delay: 0.2s; }
-.task-item:nth-child(5) { animation-delay: 0.25s; }
+.task-item:nth-child(1) { animation-delay: 0.03s; }
+.task-item:nth-child(2) { animation-delay: 0.06s; }
+.task-item:nth-child(3) { animation-delay: 0.09s; }
+.task-item:nth-child(4) { animation-delay: 0.12s; }
+.task-item:nth-child(5) { animation-delay: 0.15s; }
+.task-item:nth-child(6) { animation-delay: 0.18s; }
+.task-item:nth-child(7) { animation-delay: 0.21s; }
+.task-item:nth-child(8) { animation-delay: 0.24s; }
+.task-item:nth-child(9) { animation-delay: 0.27s; }
+.task-item:nth-child(10) { animation-delay: 0.30s; }
 
 /* ====================================
    SCROLLBAR
@@ -1437,6 +1886,10 @@ textarea.form-input {
    RESPONSIVE
    ==================================== */
 
+.mobile-menu-btn {
+    display: none;
+}
+
 @media (max-width: 1024px) {
     .sidebar {
         transform: translateX(-100%);
@@ -1445,6 +1898,7 @@ textarea.form-input {
     
     .sidebar.open {
         transform: translateX(0);
+        box-shadow: 4px 0 30px rgba(0,0,0,0.5);
     }
     
     .main-content {
@@ -1457,6 +1911,11 @@ textarea.form-input {
     
     .content-body {
         padding: 16px;
+    }
+
+    .mobile-menu-btn {
+        display: flex;
+        font-size: 20px;
     }
 }
 
