@@ -149,12 +149,24 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Проект</label>
-                            <select name="project" class="form-select">
-                                <option value="">Без проекта</option>
-                                {% for project in projects %}
-                                <option value="{{ project.id }}">{{ project.name }}</option>
-                                {% endfor %}
-                            </select>
+                            <div class="custom-select-wrap">
+                                <input type="hidden" name="project" id="taskProjectInput" value="">
+                                <button type="button" class="custom-select-trigger" id="taskProjectTrigger" onclick="toggleProjectDropdown()">
+                                    <span class="custom-select-value">Без проекта</span>
+                                    <i class="ri-arrow-down-s-line"></i>
+                                </button>
+                                <div class="custom-select-dropdown" id="taskProjectDropdown">
+                                    <div class="custom-select-option selected" data-value="" data-color="" onclick="pickProject(this)">
+                                        <span>Без проекта</span>
+                                    </div>
+                                    {% for project in projects %}
+                                    <div class="custom-select-option" data-value="{{ project.id }}" data-color="{{ project.color }}" onclick="pickProject(this)">
+                                        <span class="project-dot" style="background: {{ project.color }}"></span>
+                                        <span>{{ project.name }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Приоритет</label>

@@ -32,9 +32,6 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
 <script>
 class KanbanCalendar {
     constructor() {
@@ -414,8 +411,6 @@ class KanbanCalendar {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.kanbanCalendar = new KanbanCalendar();
-});
+window.kanbanCalendar = new KanbanCalendar();
 </script>
 {% endblock %}
