@@ -28,17 +28,17 @@
                 <div class="nav-section">
                     <a href="{% url 'scope:dashboard' %}" class="nav-item {% if current_page == 'dashboard' %}active{% endif %}">
                         <i class="ri-inbox-line"></i>
-                        <span>Все задачи</span>
+                        <span class="nav-label">Все задачи</span>
                         {% if all_count %}<span class="badge">{{ all_count }}</span>{% endif %}
                     </a>
                     <a href="{% url 'scope:today' %}" class="nav-item {% if current_page == 'today' %}active{% endif %}">
                         <i class="ri-calendar-todo-line"></i>
-                        <span>Сегодня</span>
+                        <span class="nav-label">Сегодня</span>
                         {% if today_count %}<span class="badge">{{ today_count }}</span>{% endif %}
                     </a>
                     <a href="{% url 'scope:calendar' %}" class="nav-item {% if current_page == 'calendar' %}active{% endif %}">
                         <i class="ri-calendar-line"></i>
-                        <span>Календарь</span>
+                        <span class="nav-label">Календарь</span>
                     </a>
                 </div>
                 
@@ -46,7 +46,7 @@
                     <div class="nav-section-header">
                         <a href="{% url 'scope:project_list' %}" class="nav-section-link {% if current_page == 'projects' %}active{% endif %}">
                             <i class="ri-folder-line"></i>
-                            Проекты
+                            <span class="nav-link-text">Проекты</span>
                         </a>
                         <button class="btn-icon" onclick="openProjectModal()" title="Новый проект">
                             <i class="ri-add-line"></i>
@@ -56,7 +56,7 @@
                     <a href="{% url 'scope:project_detail' project.id %}" 
                        class="nav-item {% if current_page == 'project_'|add:project.id|stringformat:'s' %}active{% endif %}">
                         <span class="project-dot" style="background-color: {{ project.color }}"></span>
-                        <span>{{ project.name }}</span>
+                        <span class="nav-label">{{ project.name }}</span>
                         {% if project.task_count %}<span class="badge">{{ project.task_count }}</span>{% endif %}
                     </a>
                     {% empty %}
@@ -66,7 +66,7 @@
                 
                 <div class="nav-section">
                     <div class="nav-section-header">
-                        <span>Теги</span>
+                        <span class="nav-section-title">Теги</span>
                         <button class="btn-icon" onclick="openTagModal()" title="Новый тег">
                             <i class="ri-add-line"></i>
                         </button>
@@ -74,7 +74,7 @@
                     {% for tag in tags %}
                     <a href="{% url 'scope:dashboard' %}?tag={{ tag.id }}" class="nav-item nav-tag">
                         <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
-                        <span>{{ tag.name }}</span>
+                        <span class="nav-label">{{ tag.name }}</span>
                     </a>
                     {% empty %}
                     <p class="nav-empty">Нет тегов</p>
@@ -90,11 +90,11 @@
                 <div class="footer-actions">
                     <a href="{% url 'admin:index' %}" class="nav-item" title="Админка">
                         <i class="ri-settings-3-line"></i>
-                        <span>Настройки</span>
+                        <span class="nav-label">Настройки</span>
                     </a>
                     <a href="{% url 'users:logout' %}" class="nav-item nav-logout" title="Выйти">
                         <i class="ri-logout-box-r-line"></i>
-                        <span>Выйти</span>
+                        <span class="nav-label">Выйти</span>
                     </a>
                 </div>
             </div>
@@ -104,6 +104,10 @@
         <main class="main-content">
             <header class="content-header">
                 <div class="header-left">
+                    <button type="button" class="btn-icon sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Свернуть меню" aria-label="Свернуть боковую панель">
+                        <i class="ri-menu-fold-line sidebar-collapse-icon-fold" aria-hidden="true"></i>
+                        <i class="ri-menu-unfold-line sidebar-collapse-icon-unfold" aria-hidden="true"></i>
+                    </button>
                     <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()" title="Меню">
                         <i class="ri-menu-line"></i>
                     </button>

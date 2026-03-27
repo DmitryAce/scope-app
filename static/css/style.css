@@ -37,6 +37,7 @@
     
     /* Размеры */
     --sidebar-width: 260px;
+    --sidebar-collapsed-width: 72px;
     --header-height: 64px;
     --radius-sm: 6px;
     --radius-md: 10px;
@@ -134,6 +135,8 @@ input, textarea, select {
     display: flex;
     flex-direction: column;
     z-index: 100;
+    transition: width 0.35s ease;
+    overflow-x: hidden;
 }
 
 .sidebar-header {
@@ -373,6 +376,85 @@ input, textarea, select {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    transition: margin-left 0.35s ease;
+}
+
+/* Компактный сайдбар (только иконки) — только на широких экранах */
+@media (min-width: 1025px) {
+    body.sidebar-collapsed {
+        --sidebar-width: var(--sidebar-collapsed-width);
+    }
+
+    body.sidebar-collapsed .logo {
+        justify-content: center;
+    }
+
+    body.sidebar-collapsed .logo-text {
+        display: none;
+    }
+
+    body.sidebar-collapsed .sidebar-header {
+        padding: 20px 8px;
+    }
+
+    body.sidebar-collapsed .nav-section {
+        padding: 8px 6px;
+    }
+
+    body.sidebar-collapsed .nav-section-header {
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 4px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    body.sidebar-collapsed .nav-section-title,
+    body.sidebar-collapsed .nav-link-text {
+        display: none;
+    }
+
+    body.sidebar-collapsed .nav-section-link {
+        padding: 8px;
+        justify-content: center;
+    }
+
+    body.sidebar-collapsed .nav-item {
+        justify-content: center;
+        padding: 10px 8px;
+        gap: 0;
+    }
+
+    body.sidebar-collapsed .nav-item .nav-label,
+    body.sidebar-collapsed .nav-item .badge {
+        display: none;
+    }
+
+    body.sidebar-collapsed .nav-empty,
+    body.sidebar-collapsed .nav-empty-link {
+        display: none;
+    }
+
+    body.sidebar-collapsed .user-name {
+        display: none;
+    }
+
+    body.sidebar-collapsed .user-info {
+        justify-content: center;
+        padding: 8px;
+    }
+
+    body.sidebar-collapsed .footer-actions {
+        flex-direction: column;
+    }
+
+    body.sidebar-collapsed .footer-actions .nav-item .nav-label {
+        display: none;
+    }
+
+    body.sidebar-collapsed .footer-actions .nav-item {
+        justify-content: center;
+    }
 }
 
 .content-header {
@@ -393,6 +475,30 @@ input, textarea, select {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+.sidebar-collapse-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-collapse-btn .sidebar-collapse-icon-unfold {
+    display: none;
+}
+
+body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-fold {
+    display: none;
+}
+
+body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
+    display: inline;
+}
+
+@media (min-width: 1025px) {
+    .sidebar-collapse-btn {
+        display: flex;
+    }
 }
 
 .page-title {
@@ -1035,7 +1141,8 @@ input, textarea, select {
 
 .kanban-days {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    /* minmax(0,1fr) — колонки сжимаются; иначе длинный текст раздувает сетку за пределы экрана */
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     min-height: 140px;
 }
 
@@ -1045,6 +1152,8 @@ input, textarea, select {
     display: flex;
     flex-direction: column;
     min-height: 140px;
+    min-width: 0;
+    overflow: hidden;
     transition: background var(--transition-fast);
     position: relative;
 }
@@ -1220,6 +1329,8 @@ input, textarea, select {
     cursor: grab;
     transition: all var(--transition-fast);
     position: relative;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .kanban-task:hover {
@@ -1280,12 +1391,18 @@ input, textarea, select {
     font-size: 10px;
     color: var(--text-muted);
     margin-top: 2px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .kanban-task-meta span {
     display: flex;
     align-items: center;
     gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .kanban-task-check {

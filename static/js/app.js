@@ -472,7 +472,7 @@ function renderSidebarProjects(projects) {
         a.href = `/projects/${proj.id}/`;
         a.className = 'nav-item';
         if (curPath === `/projects/${proj.id}/`) a.classList.add('active');
-        a.innerHTML = `<span class="project-dot" style="background-color:${proj.color}"></span><span>${escapeHtml(proj.name)}</span>${proj.task_count ? `<span class="badge">${proj.task_count}</span>` : ''}`;
+        a.innerHTML = `<span class="project-dot" style="background-color:${proj.color}"></span><span class="nav-label">${escapeHtml(proj.name)}</span>${proj.task_count ? `<span class="badge">${proj.task_count}</span>` : ''}`;
         fragment.appendChild(a);
     });
     if (header && header.nextSibling) {
@@ -501,7 +501,7 @@ function renderSidebarTags(tags) {
         const a = document.createElement('a');
         a.href = `/?tag=${tag.id}`;
         a.className = 'nav-item nav-tag';
-        a.innerHTML = `<span class="tag-dot" style="background-color:${tag.color}"></span><span>${escapeHtml(tag.name)}</span>`;
+        a.innerHTML = `<span class="tag-dot" style="background-color:${tag.color}"></span><span class="nav-label">${escapeHtml(tag.name)}</span>`;
         sec.appendChild(a);
     });
 }
@@ -928,6 +928,45 @@ document.head.appendChild(animStyle);
 function toggleSidebar() {
     document.querySelector('.sidebar')?.classList.toggle('open');
 }
+
+const SIDEBAR_COLLAPSED_KEY = 'scopeSidebarCollapsed';
+
+function updateSidebarCollapseButtonTitle() {
+    const btn = document.querySelector('.sidebar-collapse-btn');
+    if (!btn) return;
+    const collapsed = document.body.classList.contains('sidebar-collapsed');
+    btn.title = collapsed ? 'Развернуть меню' : 'Свернуть меню';
+    btn.setAttribute('aria-label', collapsed ? 'Развернуть боковую панель' : 'Свернуть боковую панель');
+}
+
+function applySidebarCollapseFromStorage() {
+    if (window.innerWidth <= 1024) {
+        document.body.classList.remove('sidebar-collapsed');
+    } else {
+        try {
+            if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-collapsed');
+            }
+        } catch {
+            document.body.classList.remove('sidebar-collapsed');
+        }
+    }
+    updateSidebarCollapseButtonTitle();
+}
+
+function toggleSidebarCollapse() {
+    if (window.innerWidth <= 1024) return;
+    document.body.classList.toggle('sidebar-collapsed');
+    try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+    } catch { /* private mode */ }
+    updateSidebarCollapseButtonTitle();
+}
+
+document.addEventListener('DOMContentLoaded', applySidebarCollapseFromStorage);
+window.addEventListener('resize', () => { applySidebarCollapseFromStorage(); });
 
 document.addEventListener('click', (e) => {
     const sidebar = document.querySelector('.sidebar');

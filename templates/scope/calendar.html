@@ -291,7 +291,7 @@ class KanbanCalendar {
                  ondragend="kanbanCalendar.onDragEnd(event)">
                 <div class="kanban-task-priority" style="background:${color}"></div>
                 <div class="kanban-task-body">
-                    <a href="${task.url}" class="kanban-task-title" draggable="false">${this.escapeHtml(task.title)}</a>
+                    <a href="${task.url}" class="kanban-task-title" draggable="false" title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}">${this.escapeHtml(task.title)}</a>
                     <div class="kanban-task-meta">
                         ${task.time ? `<span><i class="ri-time-line"></i>${task.time}</span>` : ''}
                         ${task.project ? `<span style="color:${task.projectColor || 'var(--accent-secondary)'}">${this.escapeHtml(task.project)}</span>` : ''}
