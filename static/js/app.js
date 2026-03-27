@@ -379,7 +379,9 @@ function initFormHandlers() {
                 if (data.success) {
                     closeTaskModal();
                     showToast('Задача создана');
-                    if (data.html) insertTaskIntoDOM(data.html, data.id);
+                    if (refreshKanbanIfOnCalendar()) {
+                        /* только API-перезагрузка календаря */
+                    } else if (data.html) insertTaskIntoDOM(data.html, data.id);
                     else softReloadContent();
                     refreshSidebar();
                 }
@@ -574,7 +576,7 @@ async function toggleTask(taskId) {
                 }
                 refreshSidebar();
             }
-            if (window.kanbanCalendar) window.kanbanCalendar.reload();
+            if (location.pathname === '/calendar/') refreshKanbanIfOnCalendar();
         }
     } catch { showToast('Ошибка', 'error'); }
 }
@@ -588,6 +590,7 @@ async function deleteTask(taskId) {
             if (item) { item.style.transition = 'all 0.3s ease'; item.style.opacity = '0'; item.style.transform = 'translateX(-40px)'; setTimeout(() => item.remove(), 300); }
             showToast('Задача удалена');
             refreshSidebar();
+            refreshKanbanIfOnCalendar();
             if (location.pathname.match(/^\/tasks\/\d+\/$/)) {
                 setTimeout(() => spaNavigate('/'), 400);
             }
@@ -597,7 +600,11 @@ async function deleteTask(taskId) {
 
 function insertTaskIntoDOM(html, taskId) {
     const list = document.querySelector('.task-list');
-    if (!list) { softReloadContent(); return; }
+    if (!list) {
+        if (refreshKanbanIfOnCalendar()) return;
+        softReloadContent();
+        return;
+    }
     const tmp = document.createElement('div');
     tmp.innerHTML = html.trim();
     const newItem = tmp.firstElementChild;
@@ -638,7 +645,9 @@ async function quickAddTask() {
         if (data.success) {
             input.value = '';
             showToast('Задача добавлена');
-            if (data.html) insertTaskIntoDOM(data.html, data.id);
+            if (refreshKanbanIfOnCalendar()) {
+                /* календарь обновлён */
+            } else if (data.html) insertTaskIntoDOM(data.html, data.id);
             else softReloadContent();
             refreshSidebar();
         }
@@ -823,6 +832,20 @@ document.addEventListener('change', (e) => {
         if (taskId) toggleTask(taskId);
     }
 });
+
+// ====================================
+// CALENDAR (избегаем softReload на /calendar/ — он ломает init скрипта)
+// ====================================
+
+function refreshKanbanIfOnCalendar() {
+    if (location.pathname !== '/calendar/') return false;
+    const k = window.kanbanCalendar;
+    if (k && typeof k.reload === 'function') {
+        void k.reload();
+        return true;
+    }
+    return false;
+}
 
 // ====================================
 // SOFT RELOAD CONTENT

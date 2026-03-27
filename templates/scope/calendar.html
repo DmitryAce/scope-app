@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="kanban-calendar" id="kanbanCalendar">
+<div class="kanban-calendar" id="kanbanCalendarRoot">
     <div class="kanban-toolbar">
         <div class="kanban-nav">
             <button class="btn-icon" onclick="kanbanCalendar.prevMonth()" title="Предыдущий месяц">
@@ -33,13 +33,21 @@
     </div>
 </div>
 <script>
+(function () {
+    window.__kanbanMountGen = (window.__kanbanMountGen || 0) + 1;
+
 class KanbanCalendar {
     constructor() {
+        this._mountGen = window.__kanbanMountGen;
         this.currentDate = new Date();
         this.events = [];
         this.expandedWeeks = new Set();
         this.draggedTask = null;
         void this.init('instant');
+    }
+
+    isStale() {
+        return this._mountGen !== window.__kanbanMountGen;
     }
 
     formatDateStr(y, m, d) {
@@ -56,19 +64,26 @@ class KanbanCalendar {
      */
     async init(scrollToday) {
         await this.loadEvents();
+        if (this.isStale()) return;
         this.render();
+        if (this.isStale()) return;
         if (scrollToday === 'instant' || scrollToday === 'smooth') {
             this.scheduleScrollToToday(scrollToday === 'smooth');
         }
     }
 
     scheduleScrollToToday(smooth) {
+        const g = this._mountGen;
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => this.scrollToTodayCell(smooth));
+            requestAnimationFrame(() => {
+                if (g !== window.__kanbanMountGen) return;
+                this.scrollToTodayCell(smooth);
+            });
         });
     }
 
     scrollToTodayCell(smooth) {
+        if (this.isStale()) return;
         const el = document.querySelector('#kanbanWeeks .kanban-day.today');
         if (!el) return;
         el.scrollIntoView({
@@ -96,10 +111,11 @@ class KanbanCalendar {
 
         try {
             const res = await fetch(`/api/kanban-events/?start=${start}&end=${end}`);
+            if (this.isStale()) return;
             this.events = await res.json();
             this.events.forEach(e => { if (e.order == null) e.order = 0; });
         } catch (e) {
-            this.events = [];
+            if (!this.isStale()) this.events = [];
         }
     }
 
@@ -141,15 +157,19 @@ class KanbanCalendar {
     }
 
     render() {
+        if (this.isStale()) return;
+        const titleEl = document.getElementById('kanbanTitle');
+        const container = document.getElementById('kanbanWeeks');
+        if (!titleEl || !container) return;
+
         const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
 
-        document.getElementById('kanbanTitle').textContent = `${months[m]} ${y}`;
+        titleEl.textContent = `${months[m]} ${y}`;
 
         const weeks = this.getWeeks();
         const todayStr = this.getTodayStr();
-        const container = document.getElementById('kanbanWeeks');
 
         // По умолчанию все недели раскрыты (после смены месяца expandedWeeks пустой — снова всё раскрываем)
         if (this.expandedWeeks.size === 0) {
@@ -245,6 +265,7 @@ class KanbanCalendar {
             </div>`;
         });
 
+        if (this.isStale()) return;
         container.innerHTML = html;
     }
 
@@ -426,6 +447,7 @@ class KanbanCalendar {
                 method: 'POST',
                 body: body.toString(),
             });
+            if (this.isStale()) return;
             if (data.success && data.orders) {
                 this.mergeOrdersFromResponse(data.due_date, data.orders);
                 this.render();
@@ -542,7 +564,9 @@ class KanbanCalendar {
     }
 
     async reload() {
+        if (this.isStale()) return;
         await this.loadEvents();
+        if (this.isStale()) return;
         this.render();
     }
 
@@ -563,5 +587,6 @@ class KanbanCalendar {
 }
 
 window.kanbanCalendar = new KanbanCalendar();
+})();
 </script>
 {% endblock %}
