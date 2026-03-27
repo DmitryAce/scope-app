@@ -1370,6 +1370,12 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     color: var(--text-muted);
 }
 
+.kanban-task-done-start {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border-color);
+}
+
 .kanban-task.overdue:not(.completed) {
     border-left: 2px solid var(--priority-urgent);
 }

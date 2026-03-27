@@ -217,7 +217,15 @@ class KanbanCalendar {
             week.days.forEach((day, dIdx) => {
                 const dayEvents = this.events
                     .filter(e => e.start === day.dateStr)
-                    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || a.id - b.id);
+                    .sort((a, b) => {
+                        const ac = a.completed ? 1 : 0;
+                        const bc = b.completed ? 1 : 0;
+                        if (ac !== bc) return ac - bc;
+                        const oa = Number(a.order) || 0;
+                        const ob = Number(b.order) || 0;
+                        if (oa !== ob) return oa - ob;
+                        return a.id - b.id;
+                    });
                 const isPast = day.dateStr < todayStr && !day.isToday;
                 const firstTaskId = dayEvents.length ? String(dayEvents[0].id) : '';
 
@@ -239,9 +247,10 @@ class KanbanCalendar {
                 if (dayEvents.length === 0) {
                     html += this.renderDropSlot(day.dateStr, '', true);
                 } else {
-                    dayEvents.forEach(task => {
+                    dayEvents.forEach((task, idx) => {
                         html += this.renderDropSlot(day.dateStr, String(task.id), false);
-                        html += this.renderTask(task);
+                        const doneStart = task.completed && idx > 0 && !dayEvents[idx - 1].completed;
+                        html += this.renderTask(task, doneStart);
                     });
                     html += this.renderDropSlot(day.dateStr, '', false);
                 }
@@ -279,12 +288,13 @@ class KanbanCalendar {
                  ondrop="kanbanCalendar.onSlotDrop(event)"></div>`;
     }
 
-    renderTask(task) {
+    renderTask(task, doneBlockStart) {
         const priorityColors = { low: 'var(--priority-low)', medium: 'var(--priority-medium)', high: 'var(--priority-high)', urgent: 'var(--priority-urgent)' };
         const color = priorityColors[task.priority_class] || 'var(--priority-medium)';
+        const doneSep = doneBlockStart ? ' kanban-task-done-start' : '';
 
         return `
-            <div class="kanban-task ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}"
+            <div class="kanban-task ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${doneSep}"
                  draggable="true"
                  data-task-id="${task.id}"
                  ondragstart="kanbanCalendar.onDragStart(event, ${task.id})"
@@ -470,23 +480,10 @@ class KanbanCalendar {
         try {
             const data = await apiFetch(`/tasks/${taskId}/toggle/`, { method: 'POST' });
             if (data.success) {
-                const taskEl = document.querySelector(`.kanban-task[data-task-id="${taskId}"]`);
-                if (taskEl) {
-                    if (data.is_completed) {
-                        taskEl.classList.add('completed');
-                        taskEl.querySelector('.kanban-task-check i').className = 'ri-checkbox-circle-fill';
-                        taskEl.style.transition = 'all 0.4s ease';
-                        taskEl.style.opacity = '0.4';
-                        showToast('Задача завершена! ✓');
-                    } else {
-                        taskEl.classList.remove('completed');
-                        taskEl.querySelector('.kanban-task-check i').className = 'ri-checkbox-blank-circle-line';
-                        taskEl.style.opacity = '1';
-                        showToast('Задача возвращена', 'info');
-                    }
-                }
                 const evt = this.events.find(ev => ev.id === taskId);
                 if (evt) evt.completed = data.is_completed;
+                this.render();
+                showToast(data.is_completed ? 'Задача завершена! ✓' : 'Задача возвращена', data.is_completed ? 'success' : 'info');
                 refreshSidebar();
             }
         } catch (err) {
