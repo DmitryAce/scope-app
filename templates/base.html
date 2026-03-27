@@ -40,6 +40,10 @@
                         <i class="ri-calendar-line"></i>
                         <span class="nav-label">Календарь</span>
                     </a>
+                    <a href="{% url 'scope:budget' %}" class="nav-item {% if current_page == 'budget' %}active{% endif %}">
+                        <i class="ri-wallet-3-line"></i>
+                        <span class="nav-label">Бюджет</span>
+                    </a>
                 </div>
                 
                 <div class="nav-section">
@@ -81,6 +85,8 @@
                     {% endfor %}
                 </div>
             </nav>
+
+            {% include 'scope/includes/budget_sidebar.html' %}
             
             <div class="sidebar-footer">
                 <div class="user-info">

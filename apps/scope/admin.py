@@ -1,5 +1,16 @@
 from django.contrib import admin
-from .models import Task, Project, Tag, ChecklistItem, TaskNote, TaskLink, TaskAttachment
+from .models import (
+    Task,
+    Project,
+    Tag,
+    ChecklistItem,
+    TaskNote,
+    TaskLink,
+    TaskAttachment,
+    BudgetMonthlyItem,
+    ExpenseEntry,
+    DailyBudgetPeriod,
+)
 
 
 class ChecklistItemInline(admin.TabularInline):
@@ -56,3 +67,24 @@ class ChecklistItemAdmin(admin.ModelAdmin):
 class TaskNoteAdmin(admin.ModelAdmin):
     list_display = ['task', 'created_at']
     list_filter = ['created_at']
+
+
+@admin.register(BudgetMonthlyItem)
+class BudgetMonthlyItemAdmin(admin.ModelAdmin):
+    list_display = ['title', 'user', 'year', 'month', 'amount_planned', 'amount_set_aside']
+    list_filter = ['year', 'month']
+    search_fields = ['title', 'notes']
+
+
+@admin.register(ExpenseEntry)
+class ExpenseEntryAdmin(admin.ModelAdmin):
+    list_display = ['date', 'amount', 'note', 'category', 'daily_budget_period', 'user']
+    list_filter = ['date', 'category', 'daily_budget_period']
+    date_hierarchy = 'date'
+
+
+@admin.register(DailyBudgetPeriod)
+class DailyBudgetPeriodAdmin(admin.ModelAdmin):
+    list_display = ['title', 'user', 'start_date', 'end_date', 'daily_allowance']
+    list_filter = ['start_date']
+    date_hierarchy = 'start_date'

@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load l10n %}
+
+{% block content %}
+{% with item_count=budget_items|length %}
+<div class="budget-page" id="budgetPage" data-year="{{ budget_year }}" data-month="{{ budget_month }}" data-selected-daily-id="{% if selected_daily_budget %}{{ selected_daily_budget.id }}{% endif %}">
+
+    <header class="budget-hero">
+        <div class="budget-month-nav">
+            <a href="{% url 'scope:budget' %}?year={{ budget_prev.0 }}&month={{ budget_prev.1 }}" class="btn btn-ghost btn-sm budget-month-nav-btn" aria-label="Предыдущий месяц"><i class="ri-arrow-left-s-line"></i></a>
+            <h1 class="budget-month-title">{{ budget_summary.month_label|capfirst }}</h1>
+            <a href="{% url 'scope:budget' %}?year={{ budget_next.0 }}&month={{ budget_next.1 }}" class="btn btn-ghost btn-sm budget-month-nav-btn" aria-label="Следующий месяц"><i class="ri-arrow-right-s-line"></i></a>
+        </div>
+        <div class="budget-summary-cards" role="list">
+            <div class="budget-card budget-card--planned" role="listitem">
+                <span class="budget-card-label">К отложению</span>
+                <span class="budget-card-value" id="budgetCardPlanned">{{ budget_summary.total_planned|floatformat:0 }} ₽</span>
+                <span class="budget-card-hint">сумма «Нужно» по статьям</span>
+            </div>
+            <div class="budget-card budget-card--setaside" role="listitem">
+                <span class="budget-card-label">Отложено</span>
+                <span class="budget-card-value" id="budgetCardSetAside">{{ budget_summary.total_set_aside|floatformat:0 }} ₽</span>
+                <span class="budget-card-hint" id="budgetCardSetAsideHint">{{ budget_summary.progress_pct }}% от плана</span>
+            </div>
+            <div class="budget-card budget-card--remain" role="listitem">
+                <span class="budget-card-label">Осталось</span>
+                <span class="budget-card-value" id="budgetCardRemain">{{ budget_summary.total_remaining|floatformat:0 }} ₽</span>
+                <span class="budget-card-hint">до закрытия плана</span>
+            </div>
+            <div class="budget-card budget-card--spent" role="listitem">
+                <span class="budget-card-label">Расходы</span>
+                <span class="budget-card-value" id="budgetCardExpenses">{{ budget_summary.expenses_month|floatformat:0 }} ₽</span>
+                <span class="budget-card-hint">за этот месяц</span>
+            </div>
+        </div>
+    </header>
+
+    {# ——— Дневной лимит ——— #}
+    <section class="budget-surface budget-surface--daily" aria-labelledby="budget-daily-heading">
+        <div class="budget-panel-head">
+            <h2 class="budget-panel-title" id="budget-daily-heading"><i class="ri-hand-coin-line" aria-hidden="true"></i> Дневной лимит</h2>
+            <p class="budget-panel-lead">Норма на день и перенос остатка. Траты можно вносить здесь или из бокового меню.</p>
+        </div>
+
+        <details class="budget-help-details">
+            <summary>Подробнее: как считается перенос</summary>
+            <div class="budget-help-body">
+                <p>Каждый день к переносу с вчера добавляется фиксированная норма — это сумма, доступная к тратам. Не потратили всё — остаток уходит на завтра; перебрали — минус переносится на следующий день.</p>
+                <p>Расход с датой внутри дневного периода сам попадёт в журнал переноса; иначе запись только в месячных тратах.</p>
+            </div>
+        </details>
+
+        <div class="daily-budget-toolbar">
+            <label class="daily-budget-select-wrap">
+                <span class="daily-budget-select-label">Период в этом месяце</span>
+                <select class="form-input form-select" id="dailyPeriodSelect" aria-label="Дневной период, пересекающийся с выбранным месяцем">
+                    {% for p in daily_budget_periods %}
+                    <option value="{{ p.id }}" {% if selected_daily_budget and p.id == selected_daily_budget.id %}selected{% endif %}>
+                        {% if p.title %}{{ p.title }} — {% endif %}{{ p.start_date|date:"d.m" }}–{{ p.end_date|date:"d.m" }} ({{ p.daily_allowance|floatformat:0 }} ₽/день)
+                    </option>
+                    {% empty %}
+                    <option value="">Нет периода, пересекающегося с этим месяцем</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% if selected_daily_budget %}
+            <button type="button" class="btn btn-ghost btn-sm" id="dailyPeriodDeleteBtn" data-id="{{ selected_daily_budget.id }}">Удалить период</button>
+            {% endif %}
+        </div>
+
+        {% if selected_daily_budget %}
+        <div class="daily-budget-meta">
+            <span><strong>{{ selected_daily_budget.daily_allowance|floatformat:0 }} ₽</strong> / день</span>
+            <span class="daily-budget-meta-sep">·</span>
+            <span>{{ selected_daily_budget.start_date|date:"d.m.Y" }} — {{ selected_daily_budget.end_date|date:"d.m.Y" }}</span>
+            {% if daily_period_day_count %}
+            <span class="daily-budget-meta-total" title="Сумма дневных норм за все дни периода (без учёта переносов и трат)">На период: <strong>{{ daily_period_norm_total|floatformat:0 }} ₽</strong> <span class="daily-budget-meta-sub">({{ daily_period_day_count }}&nbsp;дн. × норма)</span></span>
+            {% endif %}
+        </div>
+        {% if daily_budget_ledger|length > 1 %}
+        <p class="daily-ledger-scroll-hint">В таблице <strong>{{ daily_budget_ledger|length }}</strong> дн. — прокрутите, чтобы увидеть все строки.</p>
+        {% endif %}
+        <div class="budget-table-wrap daily-ledger-wrap daily-ledger-scroll">
+            <table class="budget-table daily-ledger-table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Перенос</th>
+                        <th>+ норма</th>
+                        <th>Доступно</th>
+                        <th>Потрачено</th>
+                        <th>На завтра</th>
+                    </tr>
+                </thead>
+                <tbody id="dailyLedgerBody">
+                    {% for row in daily_budget_ledger %}
+                    <tr class="{% if row.is_future %}daily-ledger-future{% endif %} {% if row.is_neg_carry %}daily-ledger-neg{% elif row.is_pos_carry %}daily-ledger-pos{% endif %}">
+                        <td>{{ row.date|date:"D, d.m" }}</td>
+                        <td>{{ row.carry_in|floatformat:0 }} ₽</td>
+                        <td>{{ row.daily_base|floatformat:0 }} ₽</td>
+                        <td><strong>{{ row.available|floatformat:0 }} ₽</strong></td>
+                        <td>{% if row.spent > 0 %}{{ row.spent|floatformat:0 }} ₽{% else %}—{% endif %}</td>
+                        <td>{{ row.carry_out|floatformat:0 }} ₽</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="budget-empty-hint">В выбранном месяце нет дневного периода — создайте ниже или переключите месяц, если период в других датах.</p>
+        {% endif %}
+
+        <details class="daily-budget-create-details" {% if not daily_budget_periods %}open{% endif %}>
+            <summary class="daily-budget-create-summary">Новый период</summary>
+            <div class="daily-budget-create card-like">
+                <p class="daily-budget-create-hint">По умолчанию даты — <strong>весь месяц</strong>, который сейчас открыт в бюджете (чтобы в журнале сразу были все дни). Норму можно задать «в день» или общей суммой на период.</p>
+                <div class="daily-budget-create-grid">
+                    <input type="text" id="dailyNewTitle" class="form-input" placeholder="Название (опц.)">
+                    <input type="date" id="dailyNewStart" class="form-input" value="{{ budget_calendar_month_start|date:'Y-m-d' }}" aria-label="Начало периода">
+                    <input type="date" id="dailyNewEnd" class="form-input" value="{{ budget_calendar_month_end|date:'Y-m-d' }}" aria-label="Конец периода">
+                </div>
+                <div class="daily-budget-mode">
+                    <label><input type="radio" name="dailyMode" value="daily" checked> Фиксированная сумма в день</label>
+                    <label><input type="radio" name="dailyMode" value="total"> Общая сумма на период (делим на дни)</label>
+                </div>
+                <div class="daily-budget-create-grid">
+                    <input type="number" id="dailyNewDailyAmt" class="form-input" step="0.01" min="0.01" placeholder="₽ в день">
+                    <input type="number" id="dailyNewTotalAmt" class="form-input" step="0.01" min="0.01" placeholder="Всего ₽ (режим «сумма»)" disabled>
+                </div>
+                <button type="button" class="btn btn-primary" id="dailyPeriodCreateBtn">Создать период</button>
+            </div>
+        </details>
+    </section>
+
+    {# ——— Расходы за месяц ——— #}
+    <section class="budget-surface" aria-labelledby="budget-exp-heading">
+        <div class="budget-panel-head budget-panel-head--compact">
+            <h2 class="budget-panel-title" id="budget-exp-heading"><i class="ri-shopping-cart-line" aria-hidden="true"></i> Расходы за месяц</h2>
+            <p class="budget-panel-lead">Дата и сумма. Если день попадает в дневной период этого месяца, трата сама учтётся в переносе сверху — отдельно выбирать период не нужно.</p>
+        </div>
+        <div class="budget-expense-add">
+            <input type="date" id="budgetExpDate" class="form-input" value="{{ budget_expense_date_default|date:'Y-m-d' }}" aria-label="Дата траты">
+            <input type="number" id="budgetExpAmount" class="form-input" step="0.01" min="0.01" placeholder="Сумма" aria-label="Сумма">
+            <input type="text" id="budgetExpCat" class="form-input" placeholder="Категория">
+            <input type="text" id="budgetExpNote" class="form-input budget-expense-note-field" placeholder="Комментарий">
+            <button type="button" class="btn btn-primary budget-expense-submit" id="budgetAddExpenseBtn">Записать</button>
+        </div>
+        <ul class="budget-expense-list" id="budgetExpenseList">
+            {% for e in budget_expenses %}
+            <li class="budget-expense-item" data-id="{{ e.id }}"{% if e.daily_budget_period_id %} data-in-daily="1"{% endif %}>
+                <span class="budget-expense-date">{{ e.date|date:"d.m" }}</span>
+                <span class="budget-expense-amt">{{ e.amount|floatformat:0 }} ₽</span>
+                {% if e.category %}<span class="budget-expense-cat">{{ e.category }}</span>{% endif %}
+                {% if e.daily_budget_period_id %}<span class="budget-expense-daily" title="В дневном лимите"><i class="ri-hand-coin-line"></i></span>{% endif %}
+                <span class="budget-expense-note">{{ e.note }}</span>
+                <button type="button" class="btn-icon budget-expense-del" title="Удалить"><i class="ri-close-line"></i></button>
+            </li>
+            {% empty %}
+            <li class="budget-expense-empty" id="budgetExpenseEmpty">За этот месяц расходов нет.</li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    {# ——— Обязательные платежи (свёрнуто, если уже есть статьи) ——— #}
+    <details class="budget-disclosure budget-disclosure--mandatory" id="budgetMandatoryBlock" {% if item_count == 0 %}open{% endif %}>
+        <summary class="budget-disclosure-summary">
+            <span class="budget-disclosure-title"><i class="ri-bill-line" aria-hidden="true"></i> Обязательные платежи</span>
+            <span class="budget-disclosure-badge" aria-hidden="true">{{ item_count }}</span>
+        </summary>
+        <div class="budget-disclosure-body">
+            <p class="budget-disclosure-hint">Аренда, кредиты и т.п.: в «Нужно» — план, в «Отложено» — сколько уже отложили. Карточки сверху считаются просто суммой по всем строкам.</p>
+            <div class="budget-table-wrap">
+                <table class="budget-table">
+                    <thead>
+                        <tr>
+                            <th>Статья</th>
+                            <th>Нужно</th>
+                            <th>Отложено</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="budgetItemsBody">
+                        {% for item in budget_items %}
+                        <tr data-id="{{ item.id }}">
+                            <td><input type="text" class="form-input budget-in-title" value="{{ item.title }}" aria-label="Название"></td>
+                            <td><input type="number" class="form-input budget-in-num" step="0.01" min="0.01" inputmode="decimal" lang="en" value="{% localize off %}{{ item.amount_planned }}{% endlocalize %}" aria-label="Нужно"></td>
+                            <td><input type="number" class="form-input budget-in-num" step="0.01" min="0" inputmode="decimal" lang="en" value="{% localize off %}{{ item.amount_set_aside }}{% endlocalize %}" aria-label="Отложено"></td>
+                            <td><button type="button" class="btn-icon budget-row-del" title="Удалить"><i class="ri-delete-bin-line"></i></button></td>
+                        </tr>
+                        {% empty %}
+                        <tr class="budget-table-empty"><td colspan="4">Пока нет статей — добавьте первую ниже.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="budget-add-row">
+                <input type="text" id="budgetNewTitle" class="form-input" placeholder="Название">
+                <input type="number" id="budgetNewAmount" class="form-input" step="0.01" min="0.01" placeholder="Сумма">
+                <button type="button" class="btn btn-primary" id="budgetAddItemBtn"><i class="ri-add-line"></i> Добавить</button>
+            </div>
+        </div>
+    </details>
+
+</div>
+{% endwith %}
+{% endblock %}

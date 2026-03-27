@@ -12,6 +12,9 @@ urlpatterns = [
     
     # Календарь
     path('calendar/', views.calendar_view, name='calendar'),
+
+    # Бюджет
+    path('budget/', views.budget_view, name='budget'),
     
     # Проекты
     path('projects/', views.project_list, name='project_list'),
@@ -57,5 +60,13 @@ urlpatterns = [
     path('api/kanban-events/', views.api_kanban_events, name='api_kanban_events'),
     path('api/stats/', views.api_stats, name='api_stats'),
     path('api/sidebar/', views.api_sidebar, name='api_sidebar'),
+    path('api/budget/summary/', views.api_budget_summary, name='api_budget_summary'),
+    path('api/budget/item/add/', views.api_budget_item_add, name='api_budget_item_add'),
+    path('api/budget/item/update/', views.api_budget_item_update, name='api_budget_item_update'),
+    path('api/budget/item/delete/', views.api_budget_item_delete, name='api_budget_item_delete'),
+    path('api/budget/expense/add/', views.api_budget_expense_add, name='api_budget_expense_add'),
+    path('api/budget/expense/delete/', views.api_budget_expense_delete, name='api_budget_expense_delete'),
+    path('api/budget/daily-period/add/', views.api_budget_daily_period_add, name='api_budget_daily_period_add'),
+    path('api/budget/daily-period/delete/', views.api_budget_daily_period_delete, name='api_budget_daily_period_delete'),
 ]
 

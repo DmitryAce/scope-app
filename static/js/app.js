@@ -43,8 +43,20 @@ async function apiFetch(url, opts = {}) {
         defaults.headers['Content-Type'] = 'application/x-www-form-urlencoded';
     }
     const merged = { ...defaults, ...opts, headers: { ...defaults.headers, ...opts.headers } };
-    const res = await fetch(url, merged);
-    return res.json();
+    let res;
+    try {
+        res = await fetch(url, merged);
+    } catch {
+        throw new Error('Нет сети или запрос заблокирован');
+    }
+    const text = await res.text();
+    if (!text) return {};
+    try {
+        return JSON.parse(text);
+    } catch {
+        const hint = text.replace(/\s+/g, ' ').slice(0, 120);
+        throw new Error(hint || `Ответ не JSON (${res.status})`);
+    }
 }
 
 // ====================================
@@ -89,7 +101,7 @@ function isSPALink(href) {
         const url = new URL(href, location.origin);
         if (url.origin !== location.origin) return false;
         const p = url.pathname;
-        if (['/', '/today/', '/calendar/', '/projects/', '/tags/'].includes(p)) return true;
+        if (['/', '/today/', '/calendar/', '/budget/', '/projects/', '/tags/'].includes(p)) return true;
         if (/^\/projects\/\d+\/$/.test(p)) return true;
         if (/^\/projects\/\d+\/edit\/$/.test(p)) return true;
         if (/^\/tasks\/\d+\/$/.test(p)) return true;
@@ -147,6 +159,7 @@ async function spaNavigate(url, pushState = true) {
         updateActiveNav(url);
         execContentScripts();
         reinitPage();
+        refreshBudgetSidebar();
 
         // Close mobile sidebar on navigation
         const sidebar = document.querySelector('.sidebar');
@@ -181,6 +194,7 @@ function reinitPage() {
     // Stats widget
     const widget = document.getElementById('statsWidget');
     if (widget) loadStatsWidget();
+    initBudgetPage();
 }
 
 function updateActiveNav(url) {
@@ -437,13 +451,14 @@ document.addEventListener('DOMContentLoaded', initFormHandlers);
 async function refreshSidebar() {
     try {
         const data = await apiFetch('/api/sidebar/');
+        if (!Array.isArray(data.projects) || !Array.isArray(data.tags)) return;
         renderSidebarProjects(data.projects);
         renderSidebarTags(data.tags);
         renderSidebarCounts(data);
         refreshModalProjectSelect(data.projects);
         try {
             const stats = await apiFetch('/api/stats/');
-            if (window.updateStatsWidget) window.updateStatsWidget(stats);
+            if (window.updateStatsWidget && typeof stats.streak === 'number') window.updateStatsWidget(stats);
         } catch {}
     } catch {}
 }
@@ -875,13 +890,11 @@ async function softReloadContent() {
 // STATS / MOTIVATION WIDGET
 // ====================================
 
-document.addEventListener('DOMContentLoaded', () => {
-    const w = document.getElementById('statsWidget');
-    if (w) loadStatsWidget();
-});
-
 async function loadStatsWidget() {
-    try { const d = await apiFetch('/api/stats/'); renderStatsWidget(d); } catch {}
+    try {
+        const d = await apiFetch('/api/stats/');
+        if (typeof d.streak === 'number') renderStatsWidget(d);
+    } catch {}
 }
 
 function renderStatsWidget(data) {
@@ -921,6 +934,395 @@ animStyle.textContent = `
 `;
 document.head.appendChild(animStyle);
 
+// ====================================
+// БЮДЖЕТ — ДАННЫЕ И УТИЛИТЫ
+// ====================================
+
+function formatBudgetMoney(s) {
+    const n = parseFloat(String(s).replace(',', '.'));
+    return Number.isNaN(n) ? String(s) : String(Math.round(n));
+}
+
+// ====================================
+// БЮДЖЕТ — САЙДБАР И СВОДКА
+// ====================================
+
+async function refreshBudgetSidebar() {
+    const root = document.getElementById('budgetSidebarCard');
+    if (!root) return;
+    try {
+        const data = await apiFetch('/api/budget/summary/');
+        if (!data.success) return;
+        const ml = document.getElementById('budgetSidebarMonthLabel');
+        if (ml) ml.textContent = data.month_label_short || '';
+    } catch {}
+}
+
+async function refreshBudgetPageSummary() {
+    const page = document.getElementById('budgetPage');
+    if (!page) return;
+    try {
+        const data = await apiFetch(`/api/budget/summary/?year=${page.dataset.year}&month=${page.dataset.month}`);
+        if (!data.success) return;
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = `${formatBudgetMoney(val)} ₽`; };
+        set('budgetCardPlanned', data.total_planned);
+        set('budgetCardSetAside', data.total_set_aside);
+        set('budgetCardRemain', data.total_remaining);
+        set('budgetCardExpenses', data.expenses_month);
+        const hint = document.getElementById('budgetCardSetAsideHint');
+        if (hint) hint.textContent = `${data.progress_pct || 0}% от плана`;
+    } catch {}
+}
+
+function initBudgetSidebarQuick() {
+    const form = document.getElementById('budgetSidebarQuickExpense');
+    if (!form || form._bound) return;
+    form._bound = true;
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const inp = form.querySelector('input[name="amount"]');
+        const catInp = form.querySelector('input[name="category"]');
+        const noteInp = form.querySelector('input[name="note"]');
+        if (!inp) return;
+        const amount = inp.value.trim();
+        if (!amount) return;
+        const category = (catInp?.value || '').trim();
+        const note = (noteInp?.value || '').trim();
+        try {
+            const card = document.getElementById('budgetSidebarCard');
+            const pid = card?.dataset?.dailyPeriodId;
+            const payload = {
+                amount,
+                date: new Date().toISOString().slice(0, 10),
+                note,
+                category,
+            };
+            if (pid) payload.daily_budget_period_id = parseInt(pid, 10);
+            const data = await apiFetch('/api/budget/expense/add/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (data.success) {
+                inp.value = '';
+                if (catInp) catInp.value = '';
+                if (noteInp) noteInp.value = '';
+                showToast('Расход записан', 'success');
+                refreshBudgetSidebar();
+                refreshBudgetPageSummary();
+                if (location.pathname === '/budget/') {
+                    prependExpenseToList(data.expense);
+                    if (data.expense.daily_budget_period_id && document.getElementById('dailyLedgerBody')) window.location.reload();
+                }
+            } else showToast(data.error || 'Ошибка', 'error');
+        } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+    });
+}
+
+// ====================================
+// БЮДЖЕТ — ПОСТРОЕНИЕ DOM
+// ====================================
+
+function createBudgetItemRow(item) {
+    const tr = document.createElement('tr');
+    tr.dataset.id = item.id;
+    tr.innerHTML = `
+        <td><input type="text" class="form-input budget-in-title" value="${escapeHtml(item.title)}" aria-label="Название"></td>
+        <td><input type="number" class="form-input budget-in-num" step="0.01" min="0.01" value="${escapeHtml(item.amount_planned)}" aria-label="Нужно"></td>
+        <td><input type="number" class="form-input budget-in-num" step="0.01" min="0" value="${escapeHtml(item.amount_set_aside)}" aria-label="Отложено"></td>
+        <td><button type="button" class="btn-icon budget-row-del" title="Удалить"><i class="ri-delete-bin-line"></i></button></td>`;
+    return tr;
+}
+
+function syncBudgetMandatoryBadge() {
+    const badge = document.querySelector('.budget-disclosure-badge');
+    const body = document.getElementById('budgetItemsBody');
+    if (!badge || !body) return;
+    badge.textContent = String(body.querySelectorAll('tr[data-id]').length);
+}
+
+function prependExpenseToList(exp) {
+    const list = document.getElementById('budgetExpenseList');
+    if (!list || !exp) return;
+    const empty = list.querySelector('.budget-expense-empty');
+    if (empty) empty.remove();
+    const li = document.createElement('li');
+    li.className = 'budget-expense-item';
+    li.dataset.id = exp.id;
+    const d = exp.date.split('-');
+    const dm = d.length === 3 ? `${d[2]}.${d[1]}` : exp.date;
+    const cat = exp.category ? `<span class="budget-expense-cat">${escapeHtml(exp.category)}</span>` : '';
+    const daily = exp.daily_budget_period_id ? '<span class="budget-expense-daily" title="В дневном лимите"><i class="ri-hand-coin-line"></i></span>' : '';
+    if (exp.daily_budget_period_id) li.dataset.inDaily = '1';
+    li.innerHTML = `<span class="budget-expense-date">${dm}</span><span class="budget-expense-amt">${formatBudgetMoney(exp.amount)} ₽</span>${cat}${daily}<span class="budget-expense-note">${escapeHtml(exp.note || '')}</span><button type="button" class="btn-icon budget-expense-del" title="Удалить"><i class="ri-close-line"></i></button>`;
+    list.insertBefore(li, list.firstChild);
+}
+
+// ====================================
+// БЮДЖЕТ — АВТО-СОХРАНЕНИЕ СТРОК
+// ====================================
+
+const _budgetRowTimers = new Map();
+
+function scheduleBudgetRowSave(tr) {
+    const id = tr.dataset.id;
+    if (!id) return;
+    clearTimeout(_budgetRowTimers.get(id));
+    _budgetRowTimers.set(id, setTimeout(() => saveBudgetRow(tr), 450));
+}
+
+async function saveBudgetRow(tr) {
+    const id = tr.dataset.id;
+    if (!id) return;
+    const nums = tr.querySelectorAll('.budget-in-num');
+    const plannedRaw = nums[0]?.value?.trim();
+    const asideRaw = nums[1]?.value?.trim();
+    const body = {
+        id: parseInt(id, 10),
+    };
+    const title = tr.querySelector('.budget-in-title')?.value?.trim();
+    if (title) body.title = title;
+    if (plannedRaw !== undefined && plannedRaw !== '') body.amount_planned = plannedRaw;
+    body.amount_set_aside = asideRaw === '' || asideRaw === undefined ? '0' : asideRaw;
+    try {
+        const data = await apiFetch('/api/budget/item/update/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!data.success) {
+            showToast(data.error || 'Не удалось сохранить строку', 'error');
+            return;
+        }
+        refreshBudgetSidebar();
+        refreshBudgetPageSummary();
+    } catch (err) {
+        showToast(err.message || 'Ошибка сохранения', 'error');
+    }
+}
+
+// ====================================
+// БЮДЖЕТ — ДЕЙСТВИЯ (API-вызовы)
+// ====================================
+
+async function budgetAddItem() {
+    const page = document.getElementById('budgetPage');
+    if (!page) return;
+    const titleEl = document.getElementById('budgetNewTitle');
+    const amtEl = document.getElementById('budgetNewAmount');
+    const title = titleEl?.value?.trim();
+    const amt = amtEl?.value?.trim();
+    if (!title || !amt) { showToast('Укажите название и сумму', 'warning'); return; }
+    try {
+        const data = await apiFetch('/api/budget/item/add/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title, amount_planned: amt,
+                year: parseInt(page.dataset.year, 10),
+                month: parseInt(page.dataset.month, 10),
+            }),
+        });
+        if (data.success && data.item) {
+            titleEl.value = '';
+            amtEl.value = '';
+            const body = document.getElementById('budgetItemsBody');
+            const empty = body?.querySelector('.budget-table-empty');
+            if (empty) empty.remove();
+            body?.appendChild(createBudgetItemRow(data.item));
+            syncBudgetMandatoryBadge();
+            refreshBudgetSidebar();
+            refreshBudgetPageSummary();
+            showToast('Статья добавлена', 'success');
+        } else showToast(data.error || 'Ошибка', 'error');
+    } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+}
+
+async function budgetAddExpense() {
+    const dateVal = document.getElementById('budgetExpDate')?.value;
+    const amtVal = document.getElementById('budgetExpAmount')?.value?.trim();
+    const note = document.getElementById('budgetExpNote')?.value?.trim() || '';
+    const category = document.getElementById('budgetExpCat')?.value?.trim() || '';
+    if (!dateVal || !amtVal) { showToast('Укажите дату и сумму', 'warning'); return; }
+    try {
+        const data = await apiFetch('/api/budget/expense/add/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: dateVal, amount: amtVal, note, category }),
+        });
+        if (data.success) {
+            document.getElementById('budgetExpAmount').value = '';
+            document.getElementById('budgetExpNote').value = '';
+            document.getElementById('budgetExpCat').value = '';
+            prependExpenseToList(data.expense);
+            refreshBudgetSidebar();
+            refreshBudgetPageSummary();
+            showToast('Расход записан', 'success');
+            if (data.expense.daily_budget_period_id && document.getElementById('dailyLedgerBody')) window.location.reload();
+        } else showToast(data.error || 'Ошибка', 'error');
+    } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+}
+
+async function budgetCreatePeriod() {
+    const page = document.getElementById('budgetPage');
+    if (!page) return;
+    const title = document.getElementById('dailyNewTitle')?.value?.trim() || '';
+    const start_date = document.getElementById('dailyNewStart')?.value;
+    const end_date = document.getElementById('dailyNewEnd')?.value;
+    const mode = page.querySelector('input[name="dailyMode"]:checked')?.value || 'daily';
+    if (!start_date || !end_date) { showToast('Укажите даты периода', 'warning'); return; }
+    const payload = { title, start_date, end_date, mode };
+    if (mode === 'total') {
+        const t = document.getElementById('dailyNewTotalAmt')?.value?.trim();
+        if (!t) { showToast('Укажите сумму за период', 'warning'); return; }
+        payload.total_amount = t;
+    } else {
+        const da = document.getElementById('dailyNewDailyAmt')?.value?.trim();
+        if (!da) { showToast('Укажите норму в день', 'warning'); return; }
+        payload.daily_allowance = da;
+    }
+    try {
+        const data = await apiFetch('/api/budget/daily-period/add/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (data.success) {
+            showToast('Период создан', 'success');
+            const sd = data.period?.start_date;
+            if (sd && /^\d{4}-\d{2}-\d{2}$/.test(sd)) {
+                const [py, pm] = sd.split('-');
+                window.location.href = `/budget/?year=${py}&month=${parseInt(pm, 10)}&daily_period=${data.period.id}`;
+            } else {
+                window.location.href = `/budget/?daily_period=${data.period.id}`;
+            }
+        } else showToast(data.error || 'Ошибка', 'error');
+    } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+}
+
+async function budgetDeletePeriod(periodId) {
+    if (!periodId) return;
+    if (!confirm('Удалить период? Расходы останутся, но перестанут учитываться в дневном лимите.')) return;
+    const page = document.getElementById('budgetPage');
+    try {
+        const data = await apiFetch('/api/budget/daily-period/delete/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: parseInt(periodId, 10) }),
+        });
+        if (data.success) {
+            showToast('Период удалён', 'success');
+            if (page) window.location.href = `/budget/?year=${page.dataset.year}&month=${page.dataset.month}`;
+            else window.location.href = '/budget/';
+        } else showToast(data.error || 'Ошибка', 'error');
+    } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+}
+
+async function budgetDeleteItemRow(tr) {
+    if (!tr || !confirm('Удалить эту статью?')) return;
+    try {
+        const data = await apiFetch('/api/budget/item/delete/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: parseInt(tr.dataset.id, 10) }),
+        });
+        if (data.success) {
+            tr.remove();
+            syncBudgetMandatoryBadge();
+            refreshBudgetSidebar();
+            refreshBudgetPageSummary();
+            const body = document.getElementById('budgetItemsBody');
+            if (body && !body.querySelector('tr[data-id]')) {
+                body.innerHTML = '<tr class="budget-table-empty"><td colspan="4">Пока нет статей — добавьте первую ниже.</td></tr>';
+            }
+        } else showToast(data.error || 'Ошибка', 'error');
+    } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+}
+
+async function budgetDeleteExpense(li) {
+    if (!li) return;
+    try {
+        const data = await apiFetch('/api/budget/expense/delete/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: parseInt(li.dataset.id, 10) }),
+        });
+        if (data.success) {
+            const reloadDaily = li.dataset.inDaily === '1' && document.getElementById('dailyLedgerBody');
+            li.remove();
+            refreshBudgetSidebar();
+            refreshBudgetPageSummary();
+            const list = document.getElementById('budgetExpenseList');
+            if (list && !list.querySelector('.budget-expense-item')) {
+                list.innerHTML = '<li class="budget-expense-empty" id="budgetExpenseEmpty">За этот месяц расходов нет.</li>';
+            }
+            if (reloadDaily) window.location.reload();
+        } else showToast(data.error || 'Ошибка', 'error');
+    } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
+}
+
+// ====================================
+// БЮДЖЕТ — ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ
+// ====================================
+
+function syncBudgetDailyModeInputs() {
+    const page = document.getElementById('budgetPage');
+    if (!page) return;
+    const checked = page.querySelector('input[name="dailyMode"]:checked');
+    const isTotal = checked && checked.value === 'total';
+    const da = document.getElementById('dailyNewDailyAmt');
+    const ta = document.getElementById('dailyNewTotalAmt');
+    if (da) da.disabled = !!isTotal;
+    if (ta) ta.disabled = !isTotal;
+}
+
+function initBudgetPage() {
+    const page = document.getElementById('budgetPage');
+    if (!page) return;
+
+    syncBudgetDailyModeInputs();
+
+    // --- Кнопки: прямая привязка по ID (onclick= заменяет, не дублирует) ---
+
+    const addItemBtn = document.getElementById('budgetAddItemBtn');
+    if (addItemBtn) addItemBtn.onclick = () => budgetAddItem();
+
+    const addExpBtn = document.getElementById('budgetAddExpenseBtn');
+    if (addExpBtn) addExpBtn.onclick = () => budgetAddExpense();
+
+    const createPeriodBtn = document.getElementById('dailyPeriodCreateBtn');
+    if (createPeriodBtn) createPeriodBtn.onclick = () => budgetCreatePeriod();
+
+    const delPeriodBtn = document.getElementById('dailyPeriodDeleteBtn');
+    if (delPeriodBtn) delPeriodBtn.onclick = () => budgetDeletePeriod(delPeriodBtn.dataset.id);
+
+    const periodSelect = document.getElementById('dailyPeriodSelect');
+    if (periodSelect) periodSelect.onchange = () => {
+        const id = periodSelect.value;
+        const base = `/budget/?year=${page.dataset.year}&month=${page.dataset.month}`;
+        window.location.href = id ? `${base}&daily_period=${id}` : base;
+    };
+
+    page.querySelectorAll('input[name="dailyMode"]').forEach(r => {
+        r.onchange = syncBudgetDailyModeInputs;
+    });
+
+    // --- Делегирование на #budgetPage для динамических элементов ---
+    if (page._budgetBound) return;
+    page._budgetBound = true;
+
+    page.addEventListener('click', (e) => {
+        const del = e.target.closest('.budget-row-del');
+        if (del) { budgetDeleteItemRow(del.closest('tr[data-id]')); return; }
+        const expDel = e.target.closest('.budget-expense-del');
+        if (expDel) budgetDeleteExpense(expDel.closest('.budget-expense-item'));
+    });
+
+    page.addEventListener('input', (e) => {
+        const tr = e.target.closest('#budgetItemsBody tr[data-id]');
+        if (tr && e.target.matches('.budget-in-title, .budget-in-num')) scheduleBudgetRowSave(tr);
+    });
+}
 // ====================================
 // MOBILE MENU
 // ====================================
@@ -965,7 +1367,11 @@ function toggleSidebarCollapse() {
     updateSidebarCollapseButtonTitle();
 }
 
-document.addEventListener('DOMContentLoaded', applySidebarCollapseFromStorage);
+document.addEventListener('DOMContentLoaded', () => {
+    applySidebarCollapseFromStorage();
+    initBudgetSidebarQuick();
+    reinitPage();
+});
 window.addEventListener('resize', () => { applySidebarCollapseFromStorage(); });
 
 document.addEventListener('click', (e) => {

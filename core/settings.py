@@ -1,6 +1,7 @@
 from pathlib import Path
 from decouple import config
 import os
+import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -11,9 +12,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-scope-dev-key-change-in-production')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = [h.strip() for h in config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',') if h.strip()]
 
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost,http://127.0.0.1').split(',')
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in config('CSRF_TRUSTED_ORIGINS', default='http://localhost,http://127.0.0.1').split(',') if o.strip()
+]
+
+# Локальный runserver: браузер часто ходит на 127.0.0.1, а в .env бывает только localhost → 400 Bad Request
+if 'runserver' in sys.argv:
+    for _h in ('127.0.0.1', 'localhost', '[::1]'):
+        if _h not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_h)
+    for _o in (
+        'http://127.0.0.1:8000',
+        'http://localhost:8000',
+        'http://127.0.0.1',
+        'http://localhost',
+    ):
+        if _o not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_o)
 
 # =====================
 # Application Definition
@@ -130,9 +147,17 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
-# WhiteNoise for static files in production
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Прод: манифест + collectstatic. Локально / runserver: файлы из static/ без collectstatic.
+# Иначе при DEBUG=False WhiteNoise смотрит в пустой staticfiles/ → 404 на /static/...
+_RUNSERVER = 'runserver' in sys.argv
+if DEBUG or _RUNSERVER:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+    WHITENOISE_USE_FINDERS = True
+else:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    WHITENOISE_USE_FINDERS = False
 
 # =====================
 # Media Files Settings

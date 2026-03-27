@@ -1,18 +1,32 @@
+from decimal import Decimal
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.db.models import Q, Count, Max
+from django.db.models import Q, Count, Max, Sum
 from datetime import datetime, timedelta, date
+from calendar import monthrange
 import json
 
-from .models import Task, Project, Tag, ChecklistItem, TaskNote, TaskLink, TaskAttachment
+from .models import (
+    Task,
+    Project,
+    Tag,
+    ChecklistItem,
+    TaskNote,
+    TaskLink,
+    TaskAttachment,
+    BudgetMonthlyItem,
+    ExpenseEntry,
+    DailyBudgetPeriod,
+)
 
 
 def get_sidebar_context(user):
     """Общий контекст для боковой панели - фильтрация по пользователю"""
-    return {
+    ctx = {
         'projects': Project.objects.filter(user=user, is_archived=False),
         'tags': Tag.objects.filter(user=user),
         'today_count': Task.objects.filter(
@@ -22,6 +36,108 @@ def get_sidebar_context(user):
         ).count(),
         'all_count': Task.objects.filter(user=user, is_completed=False).count(),
     }
+    today = timezone.now().date()
+    ctx['budget_sidebar'] = compute_budget_summary(user, today.year, today.month)
+    ctx['daily_budget_active_period_id'] = active_daily_budget_period_id(user)
+    return ctx
+
+
+MONTH_NAMES_RU = (
+    '', 'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+    'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+)
+MONTH_NAMES_RU_SHORT = (
+    '', 'янв.', 'фев.', 'мар.', 'апр.', 'мая', 'июн.',
+    'июл.', 'авг.', 'сен.', 'окт.', 'ноя.', 'дек.',
+)
+
+
+def compute_budget_summary(user, year, month):
+    """Сводка по бюджету за месяц (сайдбар + API). Суммы = сумма полей в строках."""
+    year = max(2000, min(2100, int(year)))
+    month = max(1, min(12, int(month)))
+    items = list(
+        BudgetMonthlyItem.objects.filter(user=user, year=year, month=month).order_by('sort_order', 'id')
+    )
+    total_planned = sum((i.amount_planned for i in items), Decimal('0'))
+    total_set_aside = sum((i.amount_set_aside for i in items), Decimal('0'))
+    total_remaining = sum((i.remaining for i in items), Decimal('0'))
+    exp_total = ExpenseEntry.objects.filter(user=user, date__year=year, date__month=month).aggregate(
+        t=Sum('amount')
+    )['t'] or Decimal('0')
+    pct = 0
+    if total_planned > 0:
+        pct = int(min(100, round(float(total_set_aside / total_planned * 100))))
+    preview = [
+        {
+            'title': i.title,
+            'remaining': str(i.remaining),
+        }
+        for i in items[:4]
+    ]
+    return {
+        'year': year,
+        'month': month,
+        'month_label_short': f'{MONTH_NAMES_RU_SHORT[month]} {year}',
+        'month_label': f'{MONTH_NAMES_RU[month]} {year}',
+        'total_planned': total_planned,
+        'total_set_aside': total_set_aside,
+        'total_remaining': total_remaining,
+        'expenses_month': exp_total,
+        'progress_pct': pct,
+        'preview': preview,
+        'items_count': len(items),
+    }
+
+
+def active_daily_budget_period_id(user):
+    t = timezone.now().date()
+    return DailyBudgetPeriod.objects.filter(
+        user=user, start_date__lte=t, end_date__gte=t
+    ).order_by('-created_at').values_list('id', flat=True).first()
+
+
+def compute_daily_budget_ledger(period):
+    """Строки: перенос + норма = доступно; минус траты = перенос на завтра."""
+    if not period:
+        return []
+    spent_qs = (
+        ExpenseEntry.objects.filter(daily_budget_period=period)
+        .values('date')
+        .annotate(total=Sum('amount'))
+    )
+    spent_map = {row['date']: row['total'] for row in spent_qs}
+    rows = []
+    carry = Decimal('0')
+    B = period.daily_allowance
+    d = period.start_date
+    today = timezone.now().date()
+    while d <= period.end_date:
+        carry_in = carry
+        available = carry_in + B
+        spent = spent_map.get(d, Decimal('0'))
+        carry_out = available - spent
+        rows.append({
+            'date': d,
+            'carry_in': carry_in,
+            'daily_base': B,
+            'available': available,
+            'spent': spent,
+            'carry_out': carry_out,
+            'is_future': d > today,
+            'is_neg_carry': carry_out < 0,
+            'is_pos_carry': carry_out > 0,
+        })
+        carry = carry_out
+        d += timedelta(days=1)
+    return rows
+
+
+def _parse_json(request):
+    try:
+        return json.loads(request.body.decode() or '{}')
+    except json.JSONDecodeError:
+        return {}
 
 
 # ==================
@@ -86,6 +202,111 @@ def calendar_view(request):
         **get_sidebar_context(request.user),
     }
     return render(request, 'scope/calendar.html', context)
+
+
+def _daily_periods_for_calendar_month(user, y, m):
+    """Периоды дневного лимита, которые пересекаются с календарным месяцем (y, m)."""
+    month_start = date(y, m, 1)
+    month_end = date(y, m, monthrange(y, m)[1])
+    return list(
+        DailyBudgetPeriod.objects.filter(
+            user=user,
+            start_date__lte=month_end,
+            end_date__gte=month_start,
+        ).order_by('-start_date', '-id')
+    )
+
+
+def _pick_daily_period_for_month(user, y, m, daily_periods, requested_pk=None):
+    """
+    Выбор периода для экрана бюджета: только из пересечений с месяцем.
+    requested_pk — из ?daily_period= если период действительно попадает в этот месяц.
+    """
+    today = timezone.now().date()
+    month_start = date(y, m, 1)
+    month_end = date(y, m, monthrange(y, m)[1])
+    if not daily_periods:
+        return None
+    if requested_pk is not None:
+        try:
+            cand = DailyBudgetPeriod.objects.get(pk=int(requested_pk), user=user)
+        except (ValueError, DailyBudgetPeriod.DoesNotExist):
+            cand = None
+        else:
+            if cand.start_date <= month_end and cand.end_date >= month_start:
+                return cand
+    anchor = today if (today.year == y and today.month == m) else month_start
+    for p in daily_periods:
+        if p.start_date <= anchor <= p.end_date:
+            return p
+    return daily_periods[0]
+
+
+@login_required
+def budget_view(request):
+    """Планировщик бюджета: обязательные платежи и расходы за месяц."""
+    today = timezone.now().date()
+    y = int(request.GET.get('year', today.year))
+    m = int(request.GET.get('month', today.month))
+    y = max(2000, min(2100, y))
+    m = max(1, min(12, m))
+
+    if m == 12:
+        next_y, next_m = y + 1, 1
+    else:
+        next_y, next_m = y, m + 1
+    if m == 1:
+        prev_y, prev_m = y - 1, 12
+    else:
+        prev_y, prev_m = y, m - 1
+
+    items = BudgetMonthlyItem.objects.filter(user=request.user, year=y, month=m).order_by('sort_order', 'id')
+    expenses = ExpenseEntry.objects.filter(user=request.user, date__year=y, date__month=m)[:500]
+    summary = compute_budget_summary(request.user, y, m)
+
+    daily_periods = _daily_periods_for_calendar_month(request.user, y, m)
+    dp_param = request.GET.get('daily_period')
+    req_pk = int(dp_param) if (dp_param and str(dp_param).isdigit()) else None
+    selected_daily = _pick_daily_period_for_month(
+        request.user, y, m, daily_periods, requested_pk=req_pk
+    )
+    daily_ledger = compute_daily_budget_ledger(selected_daily) if selected_daily else []
+
+    _, last_dom = monthrange(y, m)
+    budget_calendar_month_start = date(y, m, 1)
+    budget_calendar_month_end = date(y, m, last_dom)
+    daily_period_day_count = 0
+    daily_period_norm_total = None
+    if selected_daily:
+        daily_period_day_count = (selected_daily.end_date - selected_daily.start_date).days + 1
+        daily_period_norm_total = selected_daily.daily_allowance * daily_period_day_count
+
+    if today.year == y and today.month == m:
+        expense_date_default = today
+    else:
+        expense_date_default = date(y, m, 1)
+
+    context = {
+        'page_title': 'Бюджет',
+        'current_page': 'budget',
+        'budget_year': y,
+        'budget_month': m,
+        'budget_prev': (prev_y, prev_m),
+        'budget_next': (next_y, next_m),
+        'budget_items': items,
+        'budget_expenses': expenses,
+        'budget_summary': summary,
+        'daily_budget_periods': daily_periods,
+        'selected_daily_budget': selected_daily,
+        'daily_budget_ledger': daily_ledger,
+        'budget_calendar_month_start': budget_calendar_month_start,
+        'budget_calendar_month_end': budget_calendar_month_end,
+        'daily_period_day_count': daily_period_day_count,
+        'daily_period_norm_total': daily_period_norm_total,
+        'budget_expense_date_default': expense_date_default,
+        **get_sidebar_context(request.user),
+    }
+    return render(request, 'scope/budget.html', context)
 
 
 # ==================
@@ -826,6 +1047,241 @@ def api_sidebar(request):
         'today_count': Task.objects.filter(user=user, due_date=today, is_completed=False).count(),
         'all_count': Task.objects.filter(user=user, is_completed=False).count(),
     })
+
+
+def _budget_item_json(item):
+    return {
+        'id': item.id,
+        'title': item.title,
+        'amount_planned': str(item.amount_planned),
+        'amount_set_aside': str(item.amount_set_aside),
+        'remaining': str(item.remaining),
+        'notes': item.notes,
+    }
+
+
+@login_required
+@require_GET
+def api_budget_summary(request):
+    """Сводка бюджета для сайдбара и виджетов."""
+    today = timezone.now().date()
+    y = int(request.GET.get('year', today.year))
+    m = int(request.GET.get('month', today.month))
+    s = compute_budget_summary(request.user, y, m)
+    return JsonResponse({
+        'success': True,
+        'year': s['year'],
+        'month': s['month'],
+        'month_label_short': s['month_label_short'],
+        'total_planned': str(s['total_planned']),
+        'total_set_aside': str(s['total_set_aside']),
+        'total_remaining': str(s['total_remaining']),
+        'expenses_month': str(s['expenses_month']),
+        'progress_pct': s['progress_pct'],
+        'preview': s['preview'],
+        'items_count': s['items_count'],
+    })
+
+
+@login_required
+@require_POST
+def api_budget_item_add(request):
+    data = _parse_json(request)
+    today = timezone.now().date()
+    y = int(data.get('year', today.year))
+    m = int(data.get('month', today.month))
+    y = max(2000, min(2100, y))
+    m = max(1, min(12, m))
+    title = (data.get('title') or '').strip()
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Укажите название'}, status=400)
+    try:
+        amount = Decimal(str(data.get('amount_planned', '0')).replace(',', '.'))
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Неверная сумма'}, status=400)
+    if amount < Decimal('0.01'):
+        return JsonResponse({'success': False, 'error': 'Сумма должна быть больше нуля'}, status=400)
+    last = BudgetMonthlyItem.objects.filter(user=request.user, year=y, month=m).aggregate(mx=Max('sort_order'))
+    sort_order = (last['mx'] or 0) + 1
+    item = BudgetMonthlyItem.objects.create(
+        user=request.user,
+        year=y,
+        month=m,
+        title=title,
+        amount_planned=amount,
+        sort_order=sort_order,
+    )
+    return JsonResponse({'success': True, 'item': _budget_item_json(item)})
+
+
+@login_required
+@require_POST
+def api_budget_item_update(request):
+    data = _parse_json(request)
+    pk = data.get('id')
+    if not pk:
+        return JsonResponse({'success': False, 'error': 'Нет id'}, status=400)
+    item = get_object_or_404(BudgetMonthlyItem, pk=pk, user=request.user)
+    if 'title' in data:
+        t = (data.get('title') or '').strip()
+        if t:
+            item.title = t
+    if 'amount_planned' in data:
+        raw_p = data['amount_planned']
+        if raw_p is None or (isinstance(raw_p, str) and not str(raw_p).strip()):
+            pass
+        else:
+            try:
+                item.amount_planned = max(Decimal('0.01'), Decimal(str(raw_p).replace(',', '.')))
+            except Exception:
+                return JsonResponse({'success': False, 'error': 'Неверная сумма плана'}, status=400)
+    if 'amount_set_aside' in data:
+        raw_a = data['amount_set_aside']
+        if raw_a is None or (isinstance(raw_a, str) and not str(raw_a).strip()):
+            item.amount_set_aside = Decimal('0')
+        else:
+            try:
+                v = Decimal(str(raw_a).replace(',', '.'))
+                if v < Decimal('0'):
+                    v = Decimal('0')
+                item.amount_set_aside = v
+            except Exception:
+                return JsonResponse({'success': False, 'error': 'Неверная сумма «отложено»'}, status=400)
+    if 'notes' in data:
+        item.notes = (data.get('notes') or '')[:500]
+    item.save()
+    return JsonResponse({'success': True, 'item': _budget_item_json(item)})
+
+
+@login_required
+@require_POST
+def api_budget_item_delete(request):
+    data = _parse_json(request)
+    pk = data.get('id')
+    if not pk:
+        return JsonResponse({'success': False, 'error': 'Нет id'}, status=400)
+    BudgetMonthlyItem.objects.filter(pk=pk, user=request.user).delete()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def api_budget_expense_add(request):
+    data = _parse_json(request)
+    today = timezone.now().date()
+    ds = data.get('date') or str(today)
+    try:
+        entry_date = date.fromisoformat(ds)
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Неверная дата'}, status=400)
+    try:
+        amount = Decimal(str(data.get('amount', '0')).replace(',', '.'))
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Неверная сумма'}, status=400)
+    if amount < Decimal('0.01'):
+        return JsonResponse({'success': False, 'error': 'Сумма должна быть больше нуля'}, status=400)
+    note = (data.get('note') or '')[:200]
+    category = (data.get('category') or '')[:50]
+    period = None
+    pid = data.get('daily_budget_period_id')
+    if pid is not None and str(pid).strip() != '':
+        try:
+            period = DailyBudgetPeriod.objects.get(pk=int(pid), user=request.user)
+        except (ValueError, DailyBudgetPeriod.DoesNotExist):
+            return JsonResponse({'success': False, 'error': 'Неверный период'}, status=400)
+        if not (period.start_date <= entry_date <= period.end_date):
+            return JsonResponse({'success': False, 'error': 'Дата вне выбранного периода'}, status=400)
+    if period is None:
+        period = DailyBudgetPeriod.objects.filter(
+            user=request.user,
+            start_date__lte=entry_date,
+            end_date__gte=entry_date,
+        ).order_by('-start_date', '-id').first()
+    exp = ExpenseEntry.objects.create(
+        user=request.user,
+        date=entry_date,
+        amount=amount,
+        note=note,
+        category=category,
+        daily_budget_period=period,
+    )
+    return JsonResponse({
+        'success': True,
+        'expense': {
+            'id': exp.id,
+            'date': exp.date.isoformat(),
+            'amount': str(exp.amount),
+            'note': exp.note,
+            'category': exp.category,
+            'daily_budget_period_id': exp.daily_budget_period_id,
+        },
+    })
+
+
+@login_required
+@require_POST
+def api_budget_expense_delete(request):
+    data = _parse_json(request)
+    pk = data.get('id')
+    if not pk:
+        return JsonResponse({'success': False, 'error': 'Нет id'}, status=400)
+    ExpenseEntry.objects.filter(pk=pk, user=request.user).delete()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def api_budget_daily_period_add(request):
+    data = _parse_json(request)
+    title = (data.get('title') or '')[:200]
+    try:
+        start = date.fromisoformat(data.get('start_date', ''))
+        end = date.fromisoformat(data.get('end_date', ''))
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Неверные даты'}, status=400)
+    if end < start:
+        return JsonResponse({'success': False, 'error': 'Конец раньше начала'}, status=400)
+    mode = (data.get('mode') or 'daily').strip()
+    try:
+        if mode == 'total':
+            total = Decimal(str(data.get('total_amount', '0')).replace(',', '.'))
+            if total < Decimal('0.01'):
+                return JsonResponse({'success': False, 'error': 'Укажите сумму за период'}, status=400)
+            daily = DailyBudgetPeriod.compute_daily_from_total(total, start, end)
+        else:
+            daily = Decimal(str(data.get('daily_allowance', '0')).replace(',', '.'))
+            if daily < Decimal('0.01'):
+                return JsonResponse({'success': False, 'error': 'Укажите дневную норму'}, status=400)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Неверная сумма'}, status=400)
+    p = DailyBudgetPeriod.objects.create(
+        user=request.user,
+        title=title,
+        start_date=start,
+        end_date=end,
+        daily_allowance=daily,
+    )
+    return JsonResponse({
+        'success': True,
+        'period': {
+            'id': p.id,
+            'title': p.title,
+            'start_date': p.start_date.isoformat(),
+            'end_date': p.end_date.isoformat(),
+            'daily_allowance': str(p.daily_allowance),
+        },
+    })
+
+
+@login_required
+@require_POST
+def api_budget_daily_period_delete(request):
+    data = _parse_json(request)
+    pk = data.get('id')
+    if not pk:
+        return JsonResponse({'success': False, 'error': 'Нет id'}, status=400)
+    DailyBudgetPeriod.objects.filter(pk=pk, user=request.user).delete()
+    return JsonResponse({'success': True})
 
 
 def render_task_html(task):

@@ -1,0 +1,21 @@
+{% load static %}
+<div class="sidebar-budget-card" id="budgetSidebarCard"{% if daily_budget_active_period_id %} data-daily-period-id="{{ daily_budget_active_period_id }}"{% endif %}>
+    <a href="{% url 'scope:budget' %}" class="sidebar-budget-head">
+        <span class="sidebar-budget-head-icon"><i class="ri-wallet-3-line"></i></span>
+        <div class="sidebar-budget-head-text">
+            <span class="sidebar-budget-title nav-label">Бюджет</span>
+            <span class="sidebar-budget-month" id="budgetSidebarMonthLabel">{{ budget_sidebar.month_label_short }}</span>
+        </div>
+    </a>
+    <div class="sidebar-budget-body">
+        <form class="sidebar-budget-quick" id="budgetSidebarQuickExpense" autocomplete="off">
+            {% csrf_token %}
+            <div class="sidebar-budget-quick-row">
+                <input type="number" name="amount" step="0.01" min="0.01" inputmode="decimal" placeholder="Расход сегодня" aria-label="Сумма расхода за сегодня" required>
+                <button type="submit" class="btn-icon" title="Записать расход"><i class="ri-add-line"></i></button>
+            </div>
+            <input type="text" name="category" class="sidebar-budget-quick-secondary" placeholder="Категория" maxlength="50" aria-label="Категория">
+            <input type="text" name="note" class="sidebar-budget-quick-secondary" placeholder="Комментарий" maxlength="200" aria-label="Комментарий">
+        </form>
+    </div>
+</div>

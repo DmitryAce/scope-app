@@ -1,3 +1,7 @@
+from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -218,3 +222,101 @@ class TaskAttachment(models.Model):
             'json': 'ri-code-line',
         }
         return icons.get(ext, 'ri-file-line')
+
+
+class BudgetMonthlyItem(models.Model):
+    """Обязательные платежи / статьи бюджета за конкретный месяц."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budget_items')
+    year = models.PositiveIntegerField(validators=[MinValueValidator(2000), MaxValueValidator(2100)])
+    month = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    title = models.CharField(max_length=200)
+    amount_planned = models.DecimalField(
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))],
+        help_text='Сколько нужно на эту статью',
+    )
+    amount_set_aside = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Уже отложено / оплачено по факту',
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+    notes = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        indexes = [
+            models.Index(fields=['user', 'year', 'month']),
+        ]
+
+    def __str__(self):
+        return f'{self.title} ({self.year}-{self.month:02d})'
+
+    @property
+    def remaining(self):
+        return max(Decimal('0'), self.amount_planned - self.amount_set_aside)
+
+
+class DailyBudgetPeriod(models.Model):
+    """
+    Период с фиксированной дневной нормой: каждый день доступно перенос_с_вчера + норма − траты;
+    остаток (или долг) переносится на следующий день.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_budget_periods')
+    title = models.CharField(max_length=200, blank=True)
+    start_date = models.DateField(db_index=True)
+    end_date = models.DateField(db_index=True)
+    daily_allowance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text='Сколько «капает» на каждый день периода',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date', '-id']
+
+    def __str__(self):
+        return self.title or f'{self.start_date} — {self.end_date}'
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.end_date and self.start_date and self.end_date < self.start_date:
+            raise ValidationError('Дата окончания раньше начала')
+
+    @classmethod
+    def compute_daily_from_total(cls, total: Decimal, start: date, end: date) -> Decimal:
+        days = (end - start).days + 1
+        if days < 1:
+            days = 1
+        return (total / days).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+class ExpenseEntry(models.Model):
+    """Разовый расход (дневной учёт)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expense_entries')
+    date = models.DateField(db_index=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    note = models.CharField(max_length=200, blank=True)
+    category = models.CharField(max_length=50, blank=True)
+    daily_budget_period = models.ForeignKey(
+        'DailyBudgetPeriod',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='expenses',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['daily_budget_period', 'date']),
+        ]
+
+    def __str__(self):
+        return f'{self.amount} {self.date}'
