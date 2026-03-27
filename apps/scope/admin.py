@@ -71,8 +71,8 @@ class TaskNoteAdmin(admin.ModelAdmin):
 
 @admin.register(BudgetMonthlyItem)
 class BudgetMonthlyItemAdmin(admin.ModelAdmin):
-    list_display = ['title', 'user', 'year', 'month', 'amount_planned', 'amount_set_aside']
-    list_filter = ['year', 'month']
+    list_display = ['title', 'user', 'year', 'month', 'amount_planned', 'amount_set_aside', 'is_paid']
+    list_filter = ['year', 'month', 'is_paid']
     search_fields = ['title', 'notes']
 
 

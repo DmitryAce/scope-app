@@ -1055,6 +1055,7 @@ def _budget_item_json(item):
         'title': item.title,
         'amount_planned': str(item.amount_planned),
         'amount_set_aside': str(item.amount_set_aside),
+        'is_paid': item.is_paid,
         'remaining': str(item.remaining),
         'notes': item.notes,
     }
@@ -1149,6 +1150,8 @@ def api_budget_item_update(request):
                 return JsonResponse({'success': False, 'error': 'Неверная сумма «отложено»'}, status=400)
     if 'notes' in data:
         item.notes = (data.get('notes') or '')[:500]
+    if 'is_paid' in data:
+        item.is_paid = bool(data['is_paid'])
     item.save()
     return JsonResponse({'success': True, 'item': _budget_item_json(item)})
 

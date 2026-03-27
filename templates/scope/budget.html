@@ -169,7 +169,7 @@
             <span class="budget-disclosure-badge" aria-hidden="true">{{ item_count }}</span>
         </summary>
         <div class="budget-disclosure-body">
-            <p class="budget-disclosure-hint">Аренда, кредиты и т.п.: в «Нужно» — план, в «Отложено» — сколько уже отложили. Карточки сверху считаются просто суммой по всем строкам.</p>
+            <p class="budget-disclosure-hint">Аренда, кредиты и т.п.: в «Нужно» — план, в «Отложено» — сколько уже отложили. Галочка «Оплатил» подсвечивает строку зелёным, когда платёж закрыт. Карточки сверху по-прежнему сумма по всем строкам.</p>
             <div class="budget-table-wrap">
                 <table class="budget-table">
                     <thead>
@@ -177,19 +177,26 @@
                             <th>Статья</th>
                             <th>Нужно</th>
                             <th>Отложено</th>
+                            <th class="budget-th-paid">Оплатил</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody id="budgetItemsBody">
                         {% for item in budget_items %}
-                        <tr data-id="{{ item.id }}">
+                        <tr data-id="{{ item.id }}" class="{% if item.is_paid %}budget-item-row--paid{% endif %}">
                             <td><input type="text" class="form-input budget-in-title" value="{{ item.title }}" aria-label="Название"></td>
                             <td><input type="number" class="form-input budget-in-num" step="0.01" min="0.01" inputmode="decimal" lang="en" value="{% localize off %}{{ item.amount_planned }}{% endlocalize %}" aria-label="Нужно"></td>
                             <td><input type="number" class="form-input budget-in-num" step="0.01" min="0" inputmode="decimal" lang="en" value="{% localize off %}{{ item.amount_set_aside }}{% endlocalize %}" aria-label="Отложено"></td>
+                            <td class="budget-paid-cell">
+                                <label class="budget-paid-label">
+                                    <input type="checkbox" class="budget-in-paid" {% if item.is_paid %}checked{% endif %} aria-label="Оплатил">
+                                    <span class="budget-paid-text">Оплатил</span>
+                                </label>
+                            </td>
                             <td><button type="button" class="btn-icon budget-row-del" title="Удалить"><i class="ri-delete-bin-line"></i></button></td>
                         </tr>
                         {% empty %}
-                        <tr class="budget-table-empty"><td colspan="4">Пока нет статей — добавьте первую ниже.</td></tr>
+                        <tr class="budget-table-empty"><td colspan="5">Пока нет статей — добавьте первую ниже.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

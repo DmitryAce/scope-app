@@ -240,6 +240,7 @@ class BudgetMonthlyItem(models.Model):
         validators=[MinValueValidator(Decimal('0'))],
         help_text='Уже отложено / оплачено по факту',
     )
+    is_paid = models.BooleanField(default=False, help_text='Отметка «уже оплатил»')
     sort_order = models.PositiveIntegerField(default=0)
     notes = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

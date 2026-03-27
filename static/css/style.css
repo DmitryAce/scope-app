@@ -1892,6 +1892,52 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     font-size: 13px;
 }
 
+.budget-th-paid {
+    width: 1%;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.budget-paid-cell {
+    vertical-align: middle;
+    width: 1%;
+    text-align: center;
+}
+
+.budget-paid-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    user-select: none;
+    margin: 0;
+}
+
+.budget-paid-label input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--priority-low);
+    cursor: pointer;
+}
+
+.budget-table tr.budget-item-row--paid {
+    background: rgba(34, 197, 94, 0.09);
+    box-shadow: inset 4px 0 0 var(--priority-low);
+}
+
+.budget-table tr.budget-item-row--paid .form-input {
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+.budget-table tr.budget-item-row--paid .budget-paid-label,
+.budget-table tr.budget-item-row--paid .budget-paid-text {
+    color: var(--priority-low);
+    font-weight: 600;
+}
+
 .budget-table-empty td {
     color: var(--text-muted);
     text-align: center;

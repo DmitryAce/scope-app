@@ -1023,14 +1023,27 @@ function initBudgetSidebarQuick() {
 // БЮДЖЕТ — ПОСТРОЕНИЕ DOM
 // ====================================
 
+function syncBudgetRowPaidClass(tr) {
+    const cb = tr.querySelector('.budget-in-paid');
+    tr.classList.toggle('budget-item-row--paid', !!(cb && cb.checked));
+}
+
 function createBudgetItemRow(item) {
     const tr = document.createElement('tr');
     tr.dataset.id = item.id;
+    const paid = !!item.is_paid;
     tr.innerHTML = `
         <td><input type="text" class="form-input budget-in-title" value="${escapeHtml(item.title)}" aria-label="Название"></td>
         <td><input type="number" class="form-input budget-in-num" step="0.01" min="0.01" value="${escapeHtml(item.amount_planned)}" aria-label="Нужно"></td>
         <td><input type="number" class="form-input budget-in-num" step="0.01" min="0" value="${escapeHtml(item.amount_set_aside)}" aria-label="Отложено"></td>
+        <td class="budget-paid-cell">
+            <label class="budget-paid-label">
+                <input type="checkbox" class="budget-in-paid" ${paid ? 'checked' : ''} aria-label="Оплатил">
+                <span class="budget-paid-text">Оплатил</span>
+            </label>
+        </td>
         <td><button type="button" class="btn-icon budget-row-del" title="Удалить"><i class="ri-delete-bin-line"></i></button></td>`;
+    if (paid) tr.classList.add('budget-item-row--paid');
     return tr;
 }
 
@@ -1084,6 +1097,8 @@ async function saveBudgetRow(tr) {
     if (title) body.title = title;
     if (plannedRaw !== undefined && plannedRaw !== '') body.amount_planned = plannedRaw;
     body.amount_set_aside = asideRaw === '' || asideRaw === undefined ? '0' : asideRaw;
+    const paidCb = tr.querySelector('.budget-in-paid');
+    if (paidCb) body.is_paid = paidCb.checked;
     try {
         const data = await apiFetch('/api/budget/item/update/', {
             method: 'POST',
@@ -1093,6 +1108,10 @@ async function saveBudgetRow(tr) {
         if (!data.success) {
             showToast(data.error || 'Не удалось сохранить строку', 'error');
             return;
+        }
+        if (data.item && paidCb) {
+            paidCb.checked = !!data.item.is_paid;
+            syncBudgetRowPaidClass(tr);
         }
         refreshBudgetSidebar();
         refreshBudgetPageSummary();
@@ -1233,7 +1252,7 @@ async function budgetDeleteItemRow(tr) {
             refreshBudgetPageSummary();
             const body = document.getElementById('budgetItemsBody');
             if (body && !body.querySelector('tr[data-id]')) {
-                body.innerHTML = '<tr class="budget-table-empty"><td colspan="4">Пока нет статей — добавьте первую ниже.</td></tr>';
+                body.innerHTML = '<tr class="budget-table-empty"><td colspan="5">Пока нет статей — добавьте первую ниже.</td></tr>';
             }
         } else showToast(data.error || 'Ошибка', 'error');
     } catch (err) { showToast(err.message || 'Ошибка', 'error'); }
@@ -1321,6 +1340,14 @@ function initBudgetPage() {
     page.addEventListener('input', (e) => {
         const tr = e.target.closest('#budgetItemsBody tr[data-id]');
         if (tr && e.target.matches('.budget-in-title, .budget-in-num')) scheduleBudgetRowSave(tr);
+    });
+
+    page.addEventListener('change', (e) => {
+        const tr = e.target.closest('#budgetItemsBody tr[data-id]');
+        if (tr && e.target.matches('.budget-in-paid')) {
+            syncBudgetRowPaidClass(tr);
+            scheduleBudgetRowSave(tr);
+        }
     });
 }
 // ====================================
