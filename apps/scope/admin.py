@@ -10,6 +10,7 @@ from .models import (
     BudgetMonthlyItem,
     ExpenseEntry,
     DailyBudgetPeriod,
+    ApiAccessToken,
 )
 
 
@@ -67,6 +68,18 @@ class ChecklistItemAdmin(admin.ModelAdmin):
 class TaskNoteAdmin(admin.ModelAdmin):
     list_display = ['task', 'created_at']
     list_filter = ['created_at']
+
+
+@admin.register(ApiAccessToken)
+class ApiAccessTokenAdmin(admin.ModelAdmin):
+    list_display = ['key_prefix', 'user', 'name', 'created_at', 'last_used_at', 'is_active']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['user__username', 'name', 'key_prefix']
+    readonly_fields = ['key_prefix', 'key_hash', 'created_at', 'last_used_at']
+    ordering = ['-created_at']
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(BudgetMonthlyItem)

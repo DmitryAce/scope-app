@@ -1,9 +1,10 @@
-from django.urls import path
+from django.urls import include, path
 from . import views
 
 app_name = 'scope'
 
 urlpatterns = [
+    path('api/v2/', include('apps.scope.api_v2.urls')),
     # Главная страница - Все задачи
     path('', views.dashboard, name='dashboard'),
     

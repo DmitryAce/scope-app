@@ -321,3 +321,34 @@ class ExpenseEntry(models.Model):
 
     def __str__(self):
         return f'{self.amount} {self.date}'
+
+
+class ApiAccessToken(models.Model):
+    """Токен для API v2 (headless, MCP и т.п.). Секрет хранится только в виде SHA-256."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='api_tokens')
+    name = models.CharField(max_length=100, blank=True, help_text='Подпись: MCP, скрипт, …')
+    key_prefix = models.CharField(max_length=16, help_text='Первые символы для отображения')
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'is_active'])]
+
+    def __str__(self):
+        return f'{self.key_prefix}… ({self.user})'
+
+    @classmethod
+    def issue(cls, user, name: str = ''):
+        """Создаёт токен; возвращает (plaintext_token, instance). Plaintext показывается один раз."""
+        import hashlib
+        import secrets
+
+        raw = 'scope_' + secrets.token_urlsafe(32)
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        prefix = raw[:14]
+        obj = cls.objects.create(user=user, name=(name or '')[:100], key_prefix=prefix, key_hash=digest)
+        return raw, obj
