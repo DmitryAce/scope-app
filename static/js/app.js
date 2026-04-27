@@ -101,7 +101,7 @@ function isSPALink(href) {
         const url = new URL(href, location.origin);
         if (url.origin !== location.origin) return false;
         const p = url.pathname;
-        if (['/', '/today/', '/calendar/', '/budget/', '/projects/', '/tags/'].includes(p)) return true;
+        if (['/', '/today/', '/calendar/', '/bullet-tasks/', '/budget/', '/projects/', '/tags/'].includes(p)) return true;
         if (/^\/projects\/\d+\/$/.test(p)) return true;
         if (/^\/projects\/\d+\/edit\/$/.test(p)) return true;
         if (/^\/tasks\/\d+\/$/.test(p)) return true;
@@ -152,7 +152,8 @@ async function spaNavigate(url, pushState = true) {
         if (newDocTitle) document.title = newDocTitle.textContent;
 
         content.style.opacity = '1';
-        content.style.transform = 'translateY(0)';
+        /* translateY(0) всё равно создаёт containing block и ломает position:fixed у модалок внутри .content-body */
+        content.style.transform = 'none';
 
         if (pushState) history.pushState({ spa: true }, '', url);
 
@@ -167,7 +168,7 @@ async function spaNavigate(url, pushState = true) {
 
     } catch (err) {
         content.style.opacity = '1';
-        content.style.transform = 'translateY(0)';
+        content.style.transform = 'none';
         location.href = url;
     } finally {
         _spaNavigating = false;
@@ -183,6 +184,9 @@ function execContentScripts() {
 }
 
 function reinitPage() {
+    if (typeof window.bulletTasksPageInit === 'function') {
+        window.bulletTasksPageInit();
+    }
     // Quick add
     const input = document.getElementById('quickAddInput');
     if (input && !input._spa) {
@@ -1409,3 +1413,489 @@ document.addEventListener('click', (e) => {
         sidebar.classList.remove('open');
     }
 });
+
+// ====================================
+// BULLETTASKS (раньше static/js/bullet_tasks.js — один бандл, без второго URL / MIME)
+// ====================================
+(function () {
+    const BULLET_COLORS = [
+        '#7C3AED', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',
+        '#EF4444', '#6366F1', '#14B8A6', '#8B5CF6', '#F97316',
+        '#06B6D4', '#84CC16', '#A855F7', '#F472B6', '#64748B',
+        '#78716C', '#0EA5E9', '#22C55E', '#EAB308', '#94A3B8',
+    ];
+    const BULLET_ICONS = [
+        'fitness_center', 'task_alt', 'directions_run', 'self_improvement', 'water_drop',
+        'restaurant', 'bed', 'book', 'code', 'music_note', 'savings', 'favorite',
+        'star', 'bolt', 'timer', 'checklist', 'emoji_events', 'local_cafe', 'wb_sunny',
+        'psychology', 'groups', 'home', 'sports_esports', 'pool',
+    ];
+    const WD_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const MONTHS_RU = [
+        '', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+    ];
+
+    let _pickColor = BULLET_COLORS[0];
+    let _pickIcon = BULLET_ICONS[0];
+    const state = { tasks: [], histYear: null, histMonth: null };
+
+    function isBulletPath() {
+        return /\/bullet-tasks\/?$/.test(location.pathname);
+    }
+
+    function todayStr() {
+        const t = new Date();
+        return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    }
+
+    function setWeekdayUIFromMask(mask) {
+        const m = (mask && mask.length === 7) ? mask : '1111111';
+        const row = document.getElementById('bulletWeekdayRow');
+        if (!row) return;
+        row.querySelectorAll('.bullet-wd').forEach((btn, i) => {
+            btn.classList.toggle('is-on', m[i] === '1');
+        });
+    }
+
+    function getMaskFromUI() {
+        const row = document.getElementById('bulletWeekdayRow');
+        if (!row) return '1111111';
+        return Array.from(row.querySelectorAll('.bullet-wd'))
+            .map(b => b.classList.contains('is-on') ? '1' : '0')
+            .join('');
+    }
+
+    function initBulletStaticUI() {
+        const cList = document.getElementById('bulletColorList');
+        const iList = document.getElementById('bulletIconList');
+        const row = document.getElementById('bulletWeekdayRow');
+        const sInput = document.getElementById('bulletFormStart');
+        if (sInput && !sInput.value) sInput.value = todayStr();
+
+        if (cList && cList.children.length === 0) {
+            cList.innerHTML = BULLET_COLORS.map(c => `
+                <button type="button" class="bullet-swatch" data-c="${c}" style="--sw:${c};background-color:${c};" title="${c}" aria-label="цвет ${c}"></button>
+            `).join('');
+            cList.addEventListener('click', (e) => {
+                const b = e.target.closest('.bullet-swatch');
+                if (!b) return;
+                _pickColor = b.dataset.c;
+                cList.querySelectorAll('.bullet-swatch').forEach(x => x.classList.remove('is-picked'));
+                b.classList.add('is-picked');
+            });
+        }
+        if (iList && iList.children.length === 0) {
+            iList.innerHTML = BULLET_ICONS.map(n => `
+                <button type="button" class="bullet-ico" data-ico="${n}" title="${n}" aria-label="иконка ${n}">
+                    <span class="material-symbols-outlined bullet-micon">${n}</span>
+                </button>
+            `).join('');
+            iList.addEventListener('click', (e) => {
+                const b = e.target.closest('.bullet-ico');
+                if (!b) return;
+                _pickIcon = b.dataset.ico;
+                iList.querySelectorAll('.bullet-ico').forEach(x => x.classList.remove('is-picked'));
+                b.classList.add('is-picked');
+            });
+        }
+        if (row && row.children.length === 0) {
+            row.innerHTML = WD_LABELS.map((lb, i) => `
+                <button type="button" class="bullet-wd is-on" data-i="${i}">${lb}</button>
+            `).join('');
+            row.addEventListener('click', (e) => {
+                const b = e.target.closest('.bullet-wd');
+                if (!b) return;
+                b.classList.toggle('is-on');
+            });
+        }
+    }
+
+    function pickDefaultModal(task) {
+        initBulletStaticUI();
+        const cList = document.getElementById('bulletColorList');
+        const iList = document.getElementById('bulletIconList');
+        if (task) {
+            _pickColor = task.color;
+            _pickIcon = task.icon;
+            cList && cList.querySelectorAll('.bullet-swatch').forEach(x => {
+                x.classList.toggle('is-picked', x.dataset.c === _pickColor);
+            });
+            iList && iList.querySelectorAll('.bullet-ico').forEach(x => {
+                x.classList.toggle('is-picked', x.dataset.ico === _pickIcon);
+            });
+        } else {
+            _pickColor = BULLET_COLORS[0];
+            _pickIcon = BULLET_ICONS[0];
+            cList && cList.querySelectorAll('.bullet-swatch').forEach((x, j) => x.classList.toggle('is-picked', j === 0));
+            iList && iList.querySelectorAll('.bullet-ico').forEach((x, j) => x.classList.toggle('is-picked', j === 0));
+        }
+    }
+
+    function phase(t, tStr) {
+        if (tStr < t.start_date) return 'upcoming';
+        if (tStr > t.end_date) return 'ended';
+        return 'active';
+    }
+
+    /* две квадратные кнопки в ряд: ~44px + 44px (друг за другом, не столбиком) */
+    const BULLET_REVEAL_PX = 88;
+
+    function renderTaskCard(t, opts) {
+        const dim = (opts && opts.dim) || false;
+        const prog = t.progress;
+        const pct = Math.min(100, Math.round(100 * prog.done / Math.max(1, prog.total)));
+        const p = phase(t, state.today || todayStr());
+        const phaseTag = p === 'upcoming' ? 'Скоро' : p === 'ended' ? 'Завершена' : '';
+        const isTodayCol = !!(opts && opts.isTodayCol);
+        const showToggle = !!(opts && opts.showToggle);
+        const pts = t.total_points != null ? t.total_points : 0;
+        const titleExtra = isTodayCol
+            ? ''
+            : (phaseTag
+                ? `<span class="bullet-phase">${phaseTag}</span>`
+                : `<span class="bullet-card-frac" title="Прогресс дней">${prog.done}/${prog.total}</span>`);
+        const hairline = !isTodayCol
+            ? `<div class="bullet-goals-hairline" aria-hidden="true"><span class="bullet-goals-hairline-in" style="width:${pct}%;background:${t.color}"></span></div>`
+            : '';
+        return `
+        <div class="bullet-card bullet-card--swipe ${dim ? 'bullet-card--dim' : ''} ${!isTodayCol ? 'bullet-card--goals' : ''}" data-id="${t.id}" style="--bcol: ${t.color}; --reveal: ${BULLET_REVEAL_PX}px">
+            <div class="bullet-card__track">
+                <div class="bullet-card__face">
+                    <div class="bullet-card__face-top">
+                        <div class="bullet-card-accent" style="background:${t.color}"></div>
+                        <div class="bullet-card-icon-wrap">
+                            <span class="material-symbols-outlined bullet-micon">${t.icon}</span>
+                        </div>
+                        <div class="bullet-card-mid">
+                            <div class="bullet-card-titleline">
+                                <div class="bullet-card-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+                                ${titleExtra}
+                            </div>
+                        </div>
+                        <div class="bullet-card-pts" aria-label="Суммарно очков">
+                            <i class="ri-star-fill" aria-hidden="true"></i><span>${pts}</span>
+                        </div>
+                        ${showToggle
+                            ? `<button type="button" class="bullet-toggle-circle bullet-toggle" data-id="${t.id}" title="Выполнить" aria-label="Отметить выполнение">
+                                <span class="bullet-toggle-circle__ring" aria-hidden="true"></span>
+                               </button>`
+                            : '<span class="bullet-toggle-spacer" aria-hidden="true"></span>'}
+                    </div>
+                    ${hairline}
+                </div>
+                <div class="bullet-card__reveal" aria-label="Действия">
+                    <button type="button" class="bullet-reveal-btn bullet-reveal-btn--edit" data-edit="${t.id}" title="Изменить"><i class="ri-pencil-line"></i></button>
+                    <button type="button" class="bullet-reveal-btn bullet-reveal-btn--del bullet-del" data-id="${t.id}" title="Удалить"><i class="ri-delete-bin-line"></i></button>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function bindBulletCardSwipes() {
+        const root = document.getElementById('bulletTasksRoot');
+        if (!root) return;
+        const resetTrack = (c) => {
+            const t = c.querySelector('.bullet-card__track');
+            if (t) t.style.removeProperty('transform');
+        };
+        const hideAll = () => {
+            root.querySelectorAll('.bullet-card--swipe.is-revealed').forEach((c) => {
+                c.classList.remove('is-revealed');
+                resetTrack(c);
+            });
+        };
+        if (!root._bulletDocClose) {
+            root._bulletDocClose = true;
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#bulletTasksRoot .bullet-card--swipe')) hideAll();
+            });
+        }
+        root.querySelectorAll('.bullet-card--swipe').forEach((card) => {
+            if (card._bulletSwipe) return;
+            card._bulletSwipe = true;
+            const track = card.querySelector('.bullet-card__track');
+            const face = card.querySelector('.bullet-card__face');
+            if (!track || !face) return;
+            const wpx = () => (parseInt(getComputedStyle(card).getPropertyValue('--reveal'), 10) || BULLET_REVEAL_PX);
+            let startX = 0;
+            let baseTx = 0;
+            let dragging = false;
+            const setTx = (tx) => {
+                const m = wpx();
+                if (tx > 0) tx = 0;
+                if (tx < -m) tx = -m;
+                track.style.transition = 'none';
+                track.style.transform = `translate3d(${tx}px,0,0)`;
+            };
+            face.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('button, .bullet-toggle-circle, .bullet-toggle')) return;
+                dragging = true;
+                startX = e.clientX;
+                baseTx = card.classList.contains('is-revealed') ? -wpx() : 0;
+                if (track.style.transform) {
+                    const mm = /translate3d\((-?\d+(?:\.\d+)?)px/.exec(track.style.transform);
+                    if (mm) baseTx = parseFloat(mm[1], 10);
+                }
+                face.setPointerCapture(e.pointerId);
+            });
+            face.addEventListener('pointermove', (e) => {
+                if (!dragging) return;
+                if (!e.buttons) return;
+                setTx(baseTx + (e.clientX - startX));
+            });
+            face.addEventListener('pointerup', (e) => {
+                if (!dragging) return;
+                dragging = false;
+                const m = wpx();
+                const endTx = baseTx + (e.clientX - startX);
+                const threshold = -m * 0.45;
+                const on = endTx < threshold;
+                if (on) {
+                    card.classList.add('is-revealed');
+                    root.querySelectorAll('.bullet-card--swipe.is-revealed').forEach((c) => {
+                        if (c !== card) { c.classList.remove('is-revealed'); resetTrack(c); }
+                    });
+                } else {
+                    card.classList.remove('is-revealed');
+                }
+                track.style.removeProperty('transform');
+                try { face.releasePointerCapture(e.pointerId); } catch { /* */ }
+            });
+            face.addEventListener('pointercancel', () => {
+                dragging = false;
+                track.style.removeProperty('transform');
+            });
+        });
+    }
+
+    function renderAll() {
+        const active = state.tasks.filter(x => x.today.scheduled && !x.today.done);
+        const done = state.tasks.filter(x => x.today.scheduled && x.today.done);
+        const elA = document.getElementById('bulletListActive');
+        const elD = document.getElementById('bulletListDone');
+        const g = document.getElementById('bulletGoalsGrid');
+        if (elA) {
+            elA.innerHTML = active.length
+                ? active.map(t => renderTaskCard(t, { showToggle: true, dim: false, isTodayCol: true })).join('')
+                : '<p class="bullet-empty">Нет задач на сегодня — добавьте цель или проверьте дни недели</p>';
+        }
+        if (elD) {
+            elD.innerHTML = done.length
+                ? done.map(t => renderTaskCard(t, { showToggle: true, dim: true, isTodayCol: true })).join('')
+                : '<p class="bullet-empty bullet-empty--muted">Пока пусто</p>';
+        }
+        if (g) {
+            g.innerHTML = state.tasks.length
+                ? state.tasks.map(t => renderTaskCard(t, { showToggle: false, dim: false, isTodayCol: false })).join('')
+                : '<p class="bullet-empty">Создайте первую микроцель</p>';
+        }
+        bindBulletCardSwipes();
+    }
+
+    async function loadTasks() {
+        try {
+            const res = await fetch('/api/bullet-tasks/');
+            const d = await res.json();
+            if (d.success) {
+                state.today = d.today;
+                state.tasks = d.tasks || [];
+                renderAll();
+            }
+        } catch (e) {
+            const elA = document.getElementById('bulletListActive');
+            if (elA) elA.innerHTML = '<p class="bullet-empty">Не удалось загрузить</p>';
+        }
+    }
+
+    async function loadHistory() {
+        if (!document.getElementById('bulletHistoryList')) return;
+        const t = new Date();
+        if (state.histYear == null) state.histYear = t.getFullYear();
+        if (state.histMonth == null) state.histMonth = t.getMonth() + 1;
+        const y = state.histYear, m = state.histMonth;
+        const label = document.getElementById('bulletHistLabel');
+        if (label) label.textContent = `${MONTHS_RU[m]} ${y}`;
+        const el = document.getElementById('bulletHistoryList');
+        if (el) el.innerHTML = '<p class="bullet-empty">Загрузка…</p>';
+        try {
+            const res = await fetch(`/api/bullet-tasks/history/?year=${y}&month=${m}`);
+            const d = await res.json();
+            if (!d.success) throw new Error();
+            if (!d.days || d.days.length === 0) {
+                if (el) el.innerHTML = '<p class="bullet-empty bullet-empty--muted">За этот месяц нет отметок</p>';
+                return;
+            }
+            if (el) {
+                el.innerHTML = d.days.map(day => `
+                    <div class="bullet-hist-day">
+                        <div class="bullet-hist-date">${day.date}</div>
+                        <div class="bullet-hist-items">
+                            ${day.items.map(it => `
+                                <div class="bullet-hist-pill" style="border-color:${it.color}33;background:${it.color}14">
+                                    <span class="material-symbols-outlined bullet-micon" style="color:${it.color}">${it.icon}</span>
+                                    <span>${escapeHtml(it.title)}</span>
+                                    <span class="bullet-hist-pts">+${it.points}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+            }
+        } catch (e) {
+            if (el) el.innerHTML = '<p class="bullet-empty">Ошибка загрузки истории</p>';
+        }
+    }
+
+    function openModal(t) {
+        initBulletStaticUI();
+        const modal = document.getElementById('bulletTaskModal');
+        const title = document.getElementById('bulletModalTitle');
+        const fid = document.getElementById('bulletFormId');
+        const ft = document.getElementById('bulletFormTitle');
+        const fd = document.getElementById('bulletFormDuration');
+        const fp = document.getElementById('bulletFormPoints');
+        const fs = document.getElementById('bulletFormStart');
+        if (!modal) return;
+        if (t) {
+            if (title) title.textContent = 'Редактирование';
+            if (fid) fid.value = t.id;
+            if (ft) ft.value = t.title;
+            if (fd) fd.value = t.duration_days;
+            if (fp) fp.value = t.points_per_completion;
+            if (fs) fs.value = t.start_date;
+            setWeekdayUIFromMask(t.weekday_mask);
+            pickDefaultModal(t);
+        } else {
+            if (title) title.textContent = 'Новая микрозадача';
+            if (fid) fid.value = '';
+            if (ft) ft.value = '';
+            if (fd) fd.value = '15';
+            if (fp) fp.value = '10';
+            if (fs) fs.value = todayStr();
+            setWeekdayUIFromMask('1111111');
+            pickDefaultModal(null);
+        }
+        modal.classList.add('active');
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('bulletTaskModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    async function saveForm() {
+        const idEl = document.getElementById('bulletFormId');
+        const id = idEl && idEl.value ? parseInt(idEl.value, 10) : null;
+        const body = {
+            id: id || undefined,
+            title: (document.getElementById('bulletFormTitle') || {}).value,
+            color: _pickColor,
+            icon: _pickIcon,
+            duration_days: parseInt((document.getElementById('bulletFormDuration') || {}).value, 10) || 15,
+            points_per_completion: parseInt((document.getElementById('bulletFormPoints') || {}).value, 10) || 10,
+            start_date: (document.getElementById('bulletFormStart') || {}).value,
+            weekday_mask: getMaskFromUI(),
+        };
+        if (!getMaskFromUI().includes('1')) {
+            showToast('Выберите хотя бы один день недели', 'error');
+            return;
+        }
+        const data = await apiFetch('/api/bullet-tasks/save/', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        });
+        if (data.success) {
+            showToast('Сохранено', 'success');
+            closeModal();
+            await loadTasks();
+        } else {
+            showToast(data.error || 'Ошибка', 'error');
+        }
+    }
+
+    window.openBulletTaskModal = function (taskId) {
+        if (taskId != null) {
+            const t = state.tasks.find(x => x.id === taskId);
+            return openModal(t);
+        }
+        openModal(null);
+    };
+    window.closeBulletTaskModal = closeModal;
+    window.submitBulletTaskForm = function () { void saveForm(); };
+
+    window.bulletTasksPageInit = function () {
+        if (!isBulletPath()) return;
+        initBulletStaticUI();
+        void loadTasks();
+        void loadHistory();
+    };
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.bullet-tasks-add')) return;
+        e.preventDefault();
+        openModal(null);
+    }, true);
+
+    document.addEventListener('click', async (e) => {
+        const inRoot = e.target.closest('#bulletTasksRoot');
+        if (inRoot) {
+            const ed = e.target.closest('[data-edit]');
+            if (ed) {
+                openModal(state.tasks.find(x => x.id === +ed.dataset.edit));
+                return;
+            }
+            const del = e.target.closest('.bullet-del');
+            if (del) {
+                const id = +del.dataset.id;
+                if (!confirm('Удалить эту микроцель?')) return;
+                const data = await apiFetch('/api/bullet-tasks/delete/', {
+                    method: 'POST',
+                    body: JSON.stringify({ id }),
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (data.success) { showToast('Удалено', 'info'); await loadTasks(); }
+                return;
+            }
+            const tog = e.target.closest('.bullet-toggle');
+            if (tog) {
+                const id = +tog.dataset.id;
+                const data = await apiFetch('/api/bullet-tasks/toggle/', {
+                    method: 'POST',
+                    body: JSON.stringify({ id }),
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (data.success) {
+                    if (data.done === true) showToast(`+${data.points} очков`, 'success');
+                    else showToast('Отметка снята', 'info');
+                    await loadTasks();
+                } else {
+                    showToast(data.error || 'Ошибка', 'error');
+                }
+                return;
+            }
+        }
+        if (e.target.closest('#bulletHistPrev')) {
+            if (state.histMonth == null) return;
+            e.preventDefault();
+            state.histMonth -= 1;
+            if (state.histMonth < 1) { state.histMonth = 12; state.histYear -= 1; }
+            void loadHistory();
+            return;
+        }
+        if (e.target.closest('#bulletHistNext')) {
+            if (state.histMonth == null) return;
+            e.preventDefault();
+            state.histMonth += 1;
+            if (state.histMonth > 12) { state.histMonth = 1; state.histYear += 1; }
+            void loadHistory();
+        }
+    });
+
+    initBulletStaticUI();
+    if (isBulletPath()) {
+        void loadTasks();
+        void loadHistory();
+    }
+})();

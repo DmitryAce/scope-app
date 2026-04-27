@@ -11,6 +11,8 @@ from .models import (
     ExpenseEntry,
     DailyBudgetPeriod,
     ApiAccessToken,
+    BulletTask,
+    BulletTaskCompletion,
 )
 
 
@@ -101,3 +103,25 @@ class DailyBudgetPeriodAdmin(admin.ModelAdmin):
     list_display = ['title', 'user', 'start_date', 'end_date', 'daily_allowance']
     list_filter = ['start_date']
     date_hierarchy = 'start_date'
+
+
+class BulletTaskCompletionInline(admin.TabularInline):
+    model = BulletTaskCompletion
+    extra = 0
+    raw_id_fields = []
+
+
+@admin.register(BulletTask)
+class BulletTaskAdmin(admin.ModelAdmin):
+    list_display = ['title', 'user', 'start_date', 'duration_days', 'points_per_completion', 'weekday_mask']
+    list_filter = ['start_date']
+    search_fields = ['title', 'user__username']
+    inlines = [BulletTaskCompletionInline]
+
+
+@admin.register(BulletTaskCompletion)
+class BulletTaskCompletionAdmin(admin.ModelAdmin):
+    list_display = ['bullet_task', 'day', 'points_earned']
+    list_filter = ['day']
+    date_hierarchy = 'day'
+    raw_id_fields = ['bullet_task']

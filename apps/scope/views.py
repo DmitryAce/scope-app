@@ -8,7 +8,9 @@ from django.utils import timezone
 from django.db.models import Q, Count, Max, Sum
 from datetime import datetime, timedelta, date
 from calendar import monthrange
+from collections import defaultdict
 import json
+import re
 
 from .models import (
     Task,
@@ -21,6 +23,8 @@ from .models import (
     BudgetMonthlyItem,
     ExpenseEntry,
     DailyBudgetPeriod,
+    BulletTask,
+    BulletTaskCompletion,
 )
 
 
@@ -202,6 +206,17 @@ def calendar_view(request):
         **get_sidebar_context(request.user),
     }
     return render(request, 'scope/calendar.html', context)
+
+
+@login_required
+def bullet_tasks_view(request):
+    """Микрозадачи BulletTasks"""
+    context = {
+        'page_title': 'Микроцели',
+        'current_page': 'bullet_tasks',
+        **get_sidebar_context(request.user),
+    }
+    return render(request, 'scope/bullet_tasks.html', context)
 
 
 def _daily_periods_for_calendar_month(user, y, m):
@@ -1286,6 +1301,221 @@ def api_budget_daily_period_delete(request):
     DailyBudgetPeriod.objects.filter(pk=pk, user=request.user).delete()
     return JsonResponse({'success': True})
 
+
+# --- BulletTasks (микрозадачи) ---
+
+_HEX_COLOR = re.compile(r'^#[0-9A-Fa-f]{6}$')
+_BULLET_ICON = re.compile(r'^[a-z0-9_]{1,80}$')
+
+def _bullet_norm_mask(s: str) -> str:
+    raw = (s or '1111111')[:7]
+    raw = raw.ljust(7, '1')
+    return ''.join('1' if c == '1' else '0' for c in raw)
+
+def _bullet_weekday_ok(mask: str, d: date) -> bool:
+    w = d.weekday()
+    if len(mask) != 7:
+        return True
+    return mask[w] == '1'
+
+def _bullet_count_scheduled(st: date, en: date, mask: str) -> int:
+    n = 0
+    d = st
+    while d <= en:
+        if _bullet_weekday_ok(mask, d):
+            n += 1
+        d += timedelta(days=1)
+    return n
+
+def _bullet_task_json(bt, today, day_sets, comp_by_task) -> dict:
+    mask = _bullet_norm_mask(bt.weekday_mask)
+    st, en = bt.start_date, bt.end_date
+    t_id = bt.id
+    ds = day_sets.get(t_id) or set()
+    progress_done = len([x for x in ds if st <= x <= en and _bullet_weekday_ok(mask, x)])
+    progress_total = _bullet_count_scheduled(st, en, mask) or 1
+    today_sched = st <= today <= en and _bullet_weekday_ok(mask, today)
+    today_done = bool(today_sched and today in ds)
+    rows = comp_by_task.get(t_id) or []
+    total_points = sum(
+        r['points_earned'] for r in rows
+        if st <= r['day'] <= en
+    )
+    return {
+        'id': bt.id,
+        'title': bt.title,
+        'color': bt.color,
+        'icon': bt.icon,
+        'start_date': st.isoformat(),
+        'end_date': en.isoformat(),
+        'duration_days': bt.duration_days,
+        'points_per_completion': bt.points_per_completion,
+        'weekday_mask': mask,
+        'today': {
+            'scheduled': today_sched,
+            'done': today_done,
+        },
+        'progress': {
+            'done': progress_done,
+            'total': max(1, progress_total),
+        },
+        'total_points': total_points,
+    }
+
+@login_required
+@require_GET
+def api_bullet_tasks_list(request):
+    today = timezone.now().date()
+    tasks = list(BulletTask.objects.filter(user=request.user).order_by('-created_at'))
+    if not tasks:
+        return JsonResponse({
+            'success': True,
+            'today': today.isoformat(),
+            'tasks': [],
+        })
+    lo = min(t.start_date for t in tasks)
+    hi = max(t.end_date for t in tasks)
+    comps = list(
+        BulletTaskCompletion.objects.filter(
+            bullet_task__in=tasks,
+            day__gte=lo,
+            day__lte=hi,
+        ).values('bullet_task_id', 'day', 'points_earned')
+    )
+    day_sets: dict = defaultdict(set)
+    comp_by_task: dict = defaultdict(list)
+    for c in comps:
+        tid = c['bullet_task_id']
+        dday = c['day']
+        day_sets[tid].add(dday)
+        comp_by_task[tid].append({'day': dday, 'points_earned': c['points_earned']})
+    return JsonResponse({
+        'success': True,
+        'today': today.isoformat(),
+        'tasks': [_bullet_task_json(t, today, day_sets, comp_by_task) for t in tasks],
+    })
+
+@login_required
+@require_POST
+def api_bullet_tasks_save(request):
+    data = _parse_json(request)
+    uid = data.get('id')
+    today = timezone.now().date()
+    title = (data.get('title') or '').strip()[:200]
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Введите название'}, status=400)
+    col = (data.get('color') or '#7C3AED').strip()
+    if not _HEX_COLOR.match(col):
+        return JsonResponse({'success': False, 'error': 'Неверный цвет'}, status=400)
+    icon = (data.get('icon') or 'task_alt').strip()[:80]
+    if not _BULLET_ICON.match(icon):
+        return JsonResponse({'success': False, 'error': 'Неверная иконка'}, status=400)
+    try:
+        duration_days = int(data.get('duration_days', 15))
+    except (TypeError, ValueError):
+        duration_days = 15
+    duration_days = max(1, min(3660, duration_days))
+    try:
+        points = int(data.get('points_per_completion', 10))
+    except (TypeError, ValueError):
+        points = 10
+    points = max(1, min(1_000_000, points))
+    if data.get('start_date'):
+        try:
+            y, m, d = (int(x) for x in str(data.get('start_date')).split('-')[:3])
+            start_date = date(y, m, d)
+        except (ValueError, TypeError):
+            start_date = today
+    else:
+        start_date = today
+    mask = _bullet_norm_mask(str(data.get('weekday_mask', '1111111')))
+    if '1' not in mask:
+        return JsonResponse({'success': False, 'error': 'Выберите хотя бы один день недели'}, status=400)
+
+    if uid:
+        bt = get_object_or_404(BulletTask, pk=int(uid), user=request.user)
+    else:
+        bt = BulletTask(user=request.user)
+    bt.title = title
+    bt.color = col
+    bt.icon = icon
+    bt.start_date = start_date
+    bt.duration_days = duration_days
+    bt.points_per_completion = points
+    bt.weekday_mask = mask
+    bt.save()
+    return JsonResponse({'success': True, 'id': bt.id})
+
+@login_required
+@require_POST
+def api_bullet_tasks_delete(request):
+    data = _parse_json(request)
+    pk = data.get('id')
+    if not pk:
+        return JsonResponse({'success': False, 'error': 'Нет id'}, status=400)
+    BulletTask.objects.filter(pk=pk, user=request.user).delete()
+    return JsonResponse({'success': True})
+
+@login_required
+@require_POST
+def api_bullet_tasks_toggle(request):
+    data = _parse_json(request)
+    pk = data.get('id')
+    if not pk:
+        return JsonResponse({'success': False, 'error': 'Нет id'}, status=400)
+    bt = get_object_or_404(BulletTask, pk=int(pk), user=request.user)
+    today = timezone.now().date()
+    mask = _bullet_norm_mask(bt.weekday_mask)
+    st, en = bt.start_date, bt.end_date
+    if not (st <= today <= en and _bullet_weekday_ok(mask, today)):
+        return JsonResponse({'success': False, 'error': 'Сегодня эта микрозадача не запланирована'}, status=400)
+    ex = BulletTaskCompletion.objects.filter(bullet_task=bt, day=today).first()
+    if ex:
+        ex.delete()
+        return JsonResponse({'success': True, 'done': False})
+    BulletTaskCompletion.objects.create(
+        bullet_task=bt,
+        day=today,
+        points_earned=bt.points_per_completion,
+    )
+    return JsonResponse({'success': True, 'done': True, 'points': bt.points_per_completion})
+
+@login_required
+@require_GET
+def api_bullet_tasks_history(request):
+    today = timezone.now().date()
+    y = int(request.GET.get('year', today.year))
+    m = int(request.GET.get('month', today.month))
+    y = max(2000, min(2100, y))
+    m = max(1, min(12, m))
+    _, last = monthrange(y, m)
+    d0, d1 = date(y, m, 1), date(y, m, last)
+    items = list(
+        BulletTaskCompletion.objects.filter(
+            bullet_task__user=request.user,
+            day__gte=d0,
+            day__lte=d1,
+        )
+        .select_related('bullet_task')
+        .order_by('-day', '-id')
+    )
+    by_date: dict = defaultdict(list)
+    for c in items:
+        by_date[str(c.day)].append({
+            'id': c.bullet_task_id,
+            'title': c.bullet_task.title,
+            'color': c.bullet_task.color,
+            'icon': c.bullet_task.icon,
+            'points': c.points_earned,
+        })
+    # Дни в порядке убывания
+    day_keys = sorted(by_date.keys(), reverse=True)
+    return JsonResponse({
+        'success': True,
+        'year': y,
+        'month': m,
+        'days': [{'date': d, 'items': by_date[d]} for d in day_keys],
+    })
 
 def render_task_html(task):
     """Рендерит HTML для одной задачи (для AJAX)"""

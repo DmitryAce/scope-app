@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="bullet-tasks bullet-tasks--page" id="bulletTasksRoot" aria-label="Микроцели">
+    <div class="bullet-tasks-today" id="bulletTodaySection">
+        <div class="bullet-tasks-today-cols">
+            <div class="bullet-today-col">
+                <h3 class="bullet-today-head"><i class="ri-sun-line"></i> Сегодня</h3>
+                <div class="bullet-today-list" id="bulletListActive">
+                    <div class="bullet-empty">Загрузка…</div>
+                </div>
+            </div>
+            <div class="bullet-today-col">
+                <h3 class="bullet-today-head bullet-today-head--done"><i class="ri-checkbox-circle-line"></i> Выполнено сегодня</h3>
+                <div class="bullet-today-list" id="bulletListDone">
+                    <div class="bullet-empty bullet-empty--muted">Пока пусто</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bullet-tasks-goals">
+        <div class="bullet-goals-head">
+            <h3 class="bullet-goals-title">Все микроцели</h3>
+            <button type="button" class="btn btn-primary btn-sm bullet-tasks-add bullet-goals-add-btn" id="bulletTasksAddBtn" title="Добавить микроцель" aria-label="Добавить микроцель">
+                <i class="ri-add-line" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="bullet-goals-grid" id="bulletGoalsGrid"></div>
+    </div>
+
+    <div class="bullet-tasks-history">
+        <div class="bullet-history-toolbar">
+            <h3 class="bullet-history-title">История</h3>
+            <div class="bullet-history-nav">
+                <button type="button" class="btn btn-ghost btn-sm" id="bulletHistPrev" title="Предыдущий месяц"><i class="ri-arrow-left-s-line"></i></button>
+                <span class="bullet-history-label" id="bulletHistLabel">—</span>
+                <button type="button" class="btn btn-ghost btn-sm" id="bulletHistNext" title="Следующий месяц"><i class="ri-arrow-right-s-line"></i></button>
+            </div>
+        </div>
+        <div class="bullet-history-list" id="bulletHistoryList">
+            <p class="bullet-empty">Загрузка…</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

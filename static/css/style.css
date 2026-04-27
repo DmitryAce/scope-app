@@ -2234,12 +2234,15 @@ tr.daily-ledger-neg td:last-child {
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
+    /* Иначе невидимая модалка на весь экран (особенно последняя в DOM) перехватывает клики по странице */
+    pointer-events: none;
     transition: all var(--transition-normal);
 }
 
 .modal.active {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 .modal-overlay {
@@ -2256,15 +2259,41 @@ tr.daily-ledger-neg td:last-child {
     position: relative;
     width: 100%;
     max-width: 500px;
-    max-height: 90vh;
+    max-height: min(90vh, 900px);
+    min-height: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    overflow: visible;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     transform: translateY(20px) scale(0.95);
     transition: transform var(--transition-normal);
+}
+
+/* Форма в модалке: тело с прокруткой, футер с кнопками всегда виден */
+.modal-content > .modal-header {
+    flex-shrink: 0;
+}
+
+.modal-content > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.modal-content > form > .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.modal-content > form > .modal-footer {
+    flex-shrink: 0;
 }
 
 .modal.active .modal-content {
@@ -2297,7 +2326,6 @@ tr.daily-ledger-neg td:last-child {
 
 .modal-body {
     padding: 20px 24px;
-    overflow: visible;
 }
 
 .modal-footer {
@@ -3050,23 +3078,999 @@ select.form-input:not([multiple]) {
     }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    .content-header {
+        padding: 0 10px 0 12px;
+        gap: 0;
+        height: auto;
+        min-height: var(--header-height);
+        flex-wrap: nowrap;
+    }
+
+    .header-left {
+        min-width: 0;
+        flex: 1;
+        gap: 8px;
+    }
+
+    .page-title {
+        font-size: 1.05rem;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .header-right {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+        gap: 6px;
     }
-    
+
     .search-box {
-        width: 100%;
-        order: 1;
+        display: none !important;
     }
-    
+
+    .header-new-task-text {
+        display: none;
+    }
+
+    .header-btn-new-task {
+        padding: 0;
+        min-width: 44px;
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-md);
+    }
+
+    .header-btn-new-task i {
+        font-size: 22px;
+        margin: 0;
+    }
+
     .form-row {
         grid-template-columns: 1fr;
     }
-    
+
     .modal-content {
-        margin: 16px;
-        max-height: calc(100vh - 32px);
+        margin: 10px;
+        max-height: calc(100vh - 20px);
+        max-height: calc(100dvh - 20px);
+    }
+
+    .modal-footer {
+        padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    }
+
+    .modal-content .modal-footer {
+        justify-content: flex-start;
+        gap: 10px;
+    }
+
+    .modal-content .modal-footer .btn {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+}
+
+/* ====================================
+   BULLET TASKS (микрозадачи)
+   ==================================== */
+
+.material-symbols-outlined.bullet-micon,
+.bullet-modal .material-symbols-outlined,
+.bullet-ico .material-symbols-outlined,
+.bullet-tasks .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined', sans-serif;
+    font-size: 22px;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+    -webkit-font-smoothing: antialiased;
+}
+
+.bullet-ico .material-symbols-outlined {
+    color: inherit;
+}
+
+.bullet-tasks {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.bullet-tasks--page {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    gap: 16px;
+}
+
+.bullet-goals-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.bullet-goals-head .bullet-goals-title {
+    margin: 0;
+}
+
+.bullet-goals-add-btn {
+    flex-shrink: 0;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+}
+
+.bullet-goals-add-btn i {
+    font-size: 18px;
+    margin: 0;
+    line-height: 1;
+}
+
+.bullet-tasks-today-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .bullet-tasks-today-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
+.bullet-today-head {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bullet-today-head--done {
+    color: var(--priority-low);
+}
+
+.bullet-today-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 48px;
+}
+
+.bullet-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--border-light);
+}
+
+.bullet-empty--muted {
+    opacity: 0.85;
+}
+
+.bullet-goals-title,
+.bullet-history-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+}
+
+.bullet-goals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+}
+
+/* Карточка: свайп + один ряд */
+.bullet-card--swipe {
+    --bcol: #7C3AED;
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    transition: box-shadow var(--transition-fast);
+    touch-action: pan-y;
+}
+
+.bullet-card--swipe:hover {
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+
+.bullet-card--dim {
+    opacity: 0.7;
+}
+
+/* Трек шире карточки (свайп). Reveal вне потока — высота = только face, без пустоты под полоской */
+.bullet-card__track {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    width: calc(100% + var(--reveal, 88px));
+    min-height: 0;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.2s ease;
+    will-change: transform;
+}
+
+.bullet-card--swipe.is-revealed .bullet-card__track {
+    transform: translate3d(calc(-1 * var(--reveal, 88px)), 0, 0);
+}
+
+.bullet-card__face {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: calc(100% - var(--reveal, 88px));
+    max-width: calc(100% - var(--reveal, 88px));
+    box-sizing: border-box;
+    background: var(--bg-secondary);
+}
+
+.bullet-card__face-top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    min-height: 44px;
+    gap: 0;
+    padding: 0 4px 0 0;
+}
+
+.bullet-toggle-spacer {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-left: 2px;
+}
+
+.bullet-toggle-circle {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    margin: 0 0 0 2px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    border-radius: 50%;
+}
+
+.bullet-toggle-circle__ring {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--bcol, var(--text-muted));
+    background: transparent;
+    transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+    opacity: 0.9;
+}
+
+.bullet-toggle-circle:hover .bullet-toggle-circle__ring,
+.bullet-toggle-circle:focus-visible .bullet-toggle-circle__ring {
+    border-color: var(--bcol, var(--accent-secondary));
+    opacity: 1;
+}
+
+.bullet-card--dim .bullet-toggle-circle__ring {
+    border-color: var(--priority-low);
+    background: rgba(34, 197, 94, 0.22);
+    opacity: 1;
+}
+
+.bullet-card-accent {
+    width: 4px;
+    min-height: 40px;
+    align-self: stretch;
+    border-radius: 0;
+    flex-shrink: 0;
+}
+
+.bullet-card-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 6px 0 8px;
+    flex-shrink: 0;
+    background: none;
+    border-radius: 0;
+    color: var(--bcol);
+}
+
+.bullet-card--swipe .bullet-card-icon-wrap .bullet-micon {
+    font-size: 18px !important;
+    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+
+.bullet-card-mid {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.bullet-card-titleline {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+}
+
+.bullet-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+    min-width: 0;
+    flex: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.bullet-card-frac {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.bullet-card-mid .bullet-phase {
+    flex-shrink: 0;
+}
+
+.bullet-card-pts {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--bcol);
+    padding: 0 2px 0 4px;
+}
+
+.bullet-card-pts i {
+    color: currentColor;
+    font-size: 10px;
+    opacity: 0.9;
+}
+
+.bullet-goals-hairline {
+    height: 2px;
+    width: 100%;
+    max-height: 2px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    flex: 0 0 auto;
+    line-height: 0;
+    font-size: 0;
+}
+
+.bullet-goals-hairline-in {
+    display: block;
+    height: 100%;
+    border-radius: 0 0 0 0;
+    transition: width 0.3s ease;
+}
+
+.bullet-card__reveal {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+    align-items: center;
+    justify-items: center;
+    width: var(--reveal, 88px);
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    box-sizing: border-box;
+    background: var(--bg-tertiary);
+    border-left: 1px solid var(--border-light);
+}
+
+.bullet-reveal-btn {
+    box-sizing: border-box;
+    height: 100%;
+    max-height: 100%;
+    width: auto;
+    max-width: 100%;
+    aspect-ratio: 1;
+    min-height: 0;
+    min-width: 0;
+    margin: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-secondary);
+    background: transparent;
+    transition: background 0.12s, color 0.12s;
+    -webkit-tap-highlight-color: transparent;
+    border-radius: 0;
+}
+
+.bullet-reveal-btn--edit {
+    color: var(--accent-secondary);
+    border-right: 1px solid var(--border-light);
+}
+
+.bullet-reveal-btn--del {
+    color: #F87171;
+}
+
+.bullet-reveal-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.bullet-phase {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+}
+
+.bullet-history-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.bullet-history-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bullet-history-label {
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 140px;
+    text-align: center;
+}
+
+.bullet-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.bullet-hist-day {
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+}
+
+.bullet-hist-date {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.bullet-hist-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.bullet-hist-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.bullet-hist-pts {
+    color: var(--priority-low);
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+/* --- BulletTasks: модальное окно, поля ввода --- */
+.modal-content.bullet-modal {
+    max-width: 460px;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border-light);
+}
+
+.bullet-modal .modal-header h2 {
+    font-size: 19px;
+    letter-spacing: -0.02em;
+}
+
+.bullet-modal-body {
+    padding: 20px 22px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bullet-modal-body .form-group {
+    margin-bottom: 0;
+    margin-top: 14px;
+}
+
+.bullet-modal-body .form-group:first-of-type {
+    margin-top: 0;
+}
+
+.bullet-modal-body .form-label {
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.bullet-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.bullet-label-row .form-label {
+    margin-bottom: 0;
+}
+
+.bullet-field-hint {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* Пара «дней / очки» в модалке: один уровень подписи + поле, ровные колонки */
+.bullet-form-metrics--simple {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    margin-top: 14px;
+    align-items: end;
+}
+
+.bullet-metric-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.bullet-metric-field-label {
+    display: block;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    line-height: 1.2;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.bullet-metric-field .bullet-input-shell--compact {
+    min-height: 48px;
+}
+
+.bullet-pick-list.bullet-pick-list--colors {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 8px;
+    align-content: start;
+    padding: 12px 12px 14px;
+}
+
+@media (max-width: 420px) {
+    .bullet-pick-list.bullet-pick-list--colors {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .bullet-form-metrics--simple {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-content.bullet-modal {
+        max-width: min(460px, calc(100vw - 24px));
+    }
+}
+
+/* Оболочка поля: рамка и свечение при фокусе */
+.bullet-input-shell {
+    display: flex;
+    align-items: stretch;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.bullet-input-shell:hover {
+    border-color: rgba(124, 58, 237, 0.35);
+    background: var(--bg-elevated);
+}
+
+.bullet-input-shell:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+    background: var(--bg-secondary);
+}
+
+.bullet-input-shell-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    flex-shrink: 0;
+    font-size: 20px;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.15);
+    border-right: 1px solid var(--border-light);
+    transition: color 0.15s ease;
+}
+
+.bullet-input-shell-icon i {
+    color: inherit;
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.bullet-input-shell:focus-within .bullet-input-shell-icon {
+    color: var(--accent-secondary);
+}
+
+.bullet-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    padding: 12px 14px 12px 12px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-family: inherit;
+    outline: none;
+    line-height: 1.4;
+}
+
+.bullet-input::placeholder {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.bullet-input--num {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-size: 17px;
+    padding-left: 8px;
+    padding-right: 8px;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.bullet-input--num::-webkit-outer-spin-button,
+.bullet-input--num::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.bullet-input-shell--compact .bullet-input-shell-icon {
+    width: 40px;
+    font-size: 18px;
+}
+
+.bullet-input--date {
+    min-height: 48px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    cursor: pointer;
+    color: var(--text-primary);
+    color-scheme: dark;
+    accent-color: var(--accent-primary);
+}
+
+/* Поле даты: сетка/градиент и аккуратный индикатор календаря (WebKit/Blink) */
+.bullet-input-shell.bullet-input-shell--date {
+    border-radius: 14px;
+    background: linear-gradient(145deg, var(--bg-tertiary) 0%, rgba(124, 58, 237, 0.07) 45%, var(--bg-secondary) 100%);
+    border-color: rgba(124, 58, 237, 0.32);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.bullet-input-shell--date:hover {
+    border-color: rgba(124, 58, 237, 0.48);
+}
+
+.bullet-input-shell--date:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    background: var(--bg-secondary);
+}
+
+.bullet-input-shell--date .bullet-input--date {
+    min-height: 50px;
+    font-size: 16px; /* снижает зум iOS */
+}
+
+.bullet-input-shell--date .bullet-input--date::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.9;
+    padding: 8px;
+    margin-right: 2px;
+    border-radius: 10px;
+    filter: brightness(0) invert(0.75) sepia(1) saturate(2.2) hue-rotate(220deg);
+    transition: background 0.15s ease, filter 0.15s ease, transform 0.12s ease;
+}
+
+.bullet-input-shell--date .bullet-input--date::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background: rgba(124, 58, 237, 0.28);
+    filter: brightness(0) invert(0.8) sepia(1) saturate(2.2) hue-rotate(220deg);
+    transform: scale(1.05);
+}
+
+.bullet-pick-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bullet-pick-list:hover {
+    border-color: rgba(124, 58, 237, 0.35);
+}
+
+.bullet-pick-list--icons {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px 8px 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(124, 58, 237, 0.45) transparent;
+}
+
+.bullet-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    /* только background-color — shorthand «background» перебивал inline-цвета в модалке */
+    background-color: var(--sw, #7C3AED);
+    cursor: pointer;
+    padding: 0;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.bullet-swatch:hover {
+    transform: scale(1.08);
+}
+
+.bullet-swatch.is-picked {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-primary);
+}
+
+.bullet-ico {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    padding: 0;
+    color: var(--text-secondary);
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.bullet-ico:hover {
+    background: var(--bg-elevated);
+}
+
+.bullet-ico.is-picked {
+    border-color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.12);
+    color: var(--accent-primary);
+}
+
+.bullet-weekday-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+}
+
+.bullet-wd {
+    min-width: 40px;
+    padding: 9px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 10px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.bullet-wd:focus {
+    outline: none;
+}
+
+/* Явно фиолетовое кольцо вместо системного (часто выглядит как оранжевый/синий) */
+.bullet-wd:focus-visible {
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: 2px;
+}
+
+.bullet-wd:hover {
+    border-color: rgba(124, 58, 237, 0.45);
+    color: var(--text-secondary);
+}
+
+/* Как активный пункт сайдбара: стабильный фиолетовый, без ухода в «янтарь» */
+.bullet-wd.is-on {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.26) 0%, rgba(124, 58, 237, 0.12) 100%);
+    border-color: #7C3AED;
+    color: var(--accent-secondary);
+    box-shadow:
+        0 0 0 1px rgba(124, 58, 237, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Страница BulletTasks — мобильная вёрстка */
+@media (max-width: 640px) {
+    .bullet-tasks--page {
+        gap: 16px;
+        margin-top: 0;
+        padding-top: 4px;
+    }
+
+    .bullet-tasks-today-cols {
+        gap: 14px;
+    }
+
+    .bullet-today-head {
+        font-size: 12px;
+    }
+
+    .bullet-goals-title,
+    .bullet-history-title {
+        font-size: 14px;
+    }
+
+    .bullet-goals-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .bullet-card--swipe {
+        border-radius: var(--radius-md);
+    }
+
+    .bullet-card-title {
+        font-size: 13px;
+    }
+
+    .bullet-history-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .bullet-history-nav {
+        width: 100%;
+        justify-content: space-between;
+        padding: 2px 0;
+    }
+
+    .bullet-history-label {
+        min-width: 0;
+        font-size: 15px;
+        text-align: center;
+    }
+
+    .bullet-hist-day {
+        padding: 10px;
+    }
+
+    .bullet-hist-pill {
+        max-width: 100%;
+        font-size: 11px;
+    }
+
+    #bulletTaskModal .bullet-weekday-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        justify-content: stretch;
+    }
+
+    #bulletTaskModal .bullet-wd {
+        min-width: 0;
+        width: 100%;
+        padding: 9px 6px;
+        font-size: 11px;
+    }
+
+    .bullet-pick-list--icons {
+        max-height: 160px;
+    }
+
+    .bullet-modal .bullet-swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+    }
+
+    .bullet-modal-body {
+        padding: 16px 16px 18px;
     }
 }
 

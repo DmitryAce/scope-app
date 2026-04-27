@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -352,3 +352,61 @@ class ApiAccessToken(models.Model):
         prefix = raw[:14]
         obj = cls.objects.create(user=user, name=(name or '')[:100], key_prefix=prefix, key_hash=digest)
         return raw, obj
+
+
+class BulletTask(models.Model):
+    """
+    Микрозадача (BulletTask): шаблон с целью на N дней, очками и днями недели.
+    Пн=0 … Вс=6 в поле weekday_mask.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bullet_tasks')
+    title = models.CharField(max_length=200)
+    color = models.CharField(max_length=7, default='#7C3AED')
+    # Имя иконки Material Symbols (например fitness_center)
+    icon = models.CharField(max_length=80, default='task_alt')
+    start_date = models.DateField(db_index=True)
+    duration_days = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(3660)],
+        help_text='Длина «окна» цели в календарных днях от start_date',
+    )
+    points_per_completion = models.PositiveIntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(1_000_000)],
+    )
+    # 7 символов "0"/"1" — Пн…Вс; все единицы = каждый день
+    weekday_mask = models.CharField(max_length=7, default='1111111')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['user', 'start_date'])]
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def end_date(self) -> date:
+        return self.start_date + timedelta(days=max(0, self.duration_days - 1))
+
+
+class BulletTaskCompletion(models.Model):
+    """Факт выполнения микрозадачи в конкретный календарный день."""
+    bullet_task = models.ForeignKey(BulletTask, on_delete=models.CASCADE, related_name='completions')
+    day = models.DateField(db_index=True)
+    points_earned = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-day', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['bullet_task', 'day'], name='unique_bullet_completion_day'),
+        ]
+        indexes = [
+            models.Index(fields=['bullet_task', 'day']),
+        ]
+
+    def __str__(self):
+        return f'{self.bullet_task.title} {self.day}'

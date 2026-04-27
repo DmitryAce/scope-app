@@ -14,6 +14,9 @@ urlpatterns = [
     # Календарь
     path('calendar/', views.calendar_view, name='calendar'),
 
+    # Микрозадачи BulletTasks
+    path('bullet-tasks/', views.bullet_tasks_view, name='bullet_tasks'),
+
     # Бюджет
     path('budget/', views.budget_view, name='budget'),
     
@@ -69,5 +72,11 @@ urlpatterns = [
     path('api/budget/expense/delete/', views.api_budget_expense_delete, name='api_budget_expense_delete'),
     path('api/budget/daily-period/add/', views.api_budget_daily_period_add, name='api_budget_daily_period_add'),
     path('api/budget/daily-period/delete/', views.api_budget_daily_period_delete, name='api_budget_daily_period_delete'),
+
+    path('api/bullet-tasks/', views.api_bullet_tasks_list, name='api_bullet_tasks_list'),
+    path('api/bullet-tasks/save/', views.api_bullet_tasks_save, name='api_bullet_tasks_save'),
+    path('api/bullet-tasks/delete/', views.api_bullet_tasks_delete, name='api_bullet_tasks_delete'),
+    path('api/bullet-tasks/toggle/', views.api_bullet_tasks_toggle, name='api_bullet_tasks_toggle'),
+    path('api/bullet-tasks/history/', views.api_bullet_tasks_history, name='api_bullet_tasks_history'),
 ]
 
