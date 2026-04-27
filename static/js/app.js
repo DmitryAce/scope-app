@@ -1549,7 +1549,16 @@ document.addEventListener('click', (e) => {
         const phaseTag = p === 'upcoming' ? 'Скоро' : p === 'ended' ? 'Завершена' : '';
         const isTodayCol = !!(opts && opts.isTodayCol);
         const showToggle = !!(opts && opts.showToggle);
-        const pts = t.total_points != null ? t.total_points : 0;
+        const todayDone = isTodayCol && t.today && t.today.done;
+        const ptsTotal = t.total_points != null ? t.total_points : 0;
+        const ptsForToday = t.points_per_completion != null ? t.points_per_completion : 0;
+        const ptsBlock = isTodayCol
+            ? `<div class="bullet-card-pts bullet-card-pts--today" aria-label="${todayDone ? 'Получено очков за сегодня' : 'Очки за выполнение сегодня'}">
+                            <i class="ri-star-fill" aria-hidden="true"></i><span>${ptsForToday}</span>
+                        </div>`
+            : `<div class="bullet-card-pts" aria-label="Суммарно очков">
+                            <i class="ri-star-fill" aria-hidden="true"></i><span>${ptsTotal}</span>
+                        </div>`;
         const titleExtra = isTodayCol
             ? ''
             : (phaseTag
@@ -1569,17 +1578,19 @@ document.addEventListener('click', (e) => {
                         </div>
                         <div class="bullet-card-mid">
                             <div class="bullet-card-titleline">
-                                <div class="bullet-card-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+                                <div class="bullet-card-title${todayDone ? ' bullet-card-title--today-done' : ''}" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
                                 ${titleExtra}
                             </div>
                         </div>
-                        <div class="bullet-card-pts" aria-label="Суммарно очков">
-                            <i class="ri-star-fill" aria-hidden="true"></i><span>${pts}</span>
-                        </div>
+                        ${ptsBlock}
                         ${showToggle
-                            ? `<button type="button" class="bullet-toggle-circle bullet-toggle" data-id="${t.id}" title="Выполнить" aria-label="Отметить выполнение">
-                                <span class="bullet-toggle-circle__ring" aria-hidden="true"></span>
+                            ? (todayDone
+                                ? `<button type="button" class="bullet-toggle-circle bullet-toggle bullet-toggle--done" data-id="${t.id}" title="Снять отметку" aria-label="Снять отметку выполнения">
+                                <span class="bullet-toggle-circle__check" aria-hidden="true"><i class="ri-check-line"></i></span>
                                </button>`
+                                : `<button type="button" class="bullet-toggle-circle bullet-toggle" data-id="${t.id}" title="Выполнить" aria-label="Отметить выполнение">
+                                <span class="bullet-toggle-circle__ring" aria-hidden="true"></span>
+                               </button>`)
                             : '<span class="bullet-toggle-spacer" aria-hidden="true"></span>'}
                     </div>
                     ${hairline}
@@ -1682,7 +1693,7 @@ document.addEventListener('click', (e) => {
         }
         if (elD) {
             elD.innerHTML = done.length
-                ? done.map(t => renderTaskCard(t, { showToggle: true, dim: true, isTodayCol: true })).join('')
+                ? done.map(t => renderTaskCard(t, { showToggle: true, dim: false, isTodayCol: true })).join('')
                 : '<p class="bullet-empty bullet-empty--muted">Пока пусто</p>';
         }
         if (g) {

@@ -3471,6 +3471,45 @@ select.form-input:not([multiple]) {
     opacity: 0.9;
 }
 
+/* Колонка «Сегодня»: показываем награду за выполнение, не сумму за период */
+.bullet-card-pts--today {
+    color: var(--accent-secondary);
+}
+
+.bullet-card-title--today-done {
+    text-decoration: line-through;
+    color: var(--text-muted);
+    opacity: 0.82;
+}
+
+.bullet-toggle--done {
+    cursor: pointer;
+}
+
+.bullet-toggle--done:hover .bullet-toggle-circle__check,
+.bullet-toggle--done:focus-visible .bullet-toggle-circle__check {
+    filter: brightness(1.06);
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
+}
+
+.bullet-toggle-circle__check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #22c55e 0%, #16a34a 100%);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.bullet-toggle-circle__check i {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+}
+
 .bullet-goals-hairline {
     height: 2px;
     width: 100%;
