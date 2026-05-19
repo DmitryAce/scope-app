@@ -43,3 +43,10 @@ media/attachments/
 
 # Docker volumes
 postgres_data/
+
+# Browser profile
+browser_profile/
+
+# Собирается перед PyInstaller (`make icon`), не версионировать
+app/scope.ico
+app/webstead.ico

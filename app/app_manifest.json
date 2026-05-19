@@ -1,0 +1,10 @@
+{
+  "display_name": "Scope",
+  "organization_name": "Scope",
+  "start_url": "https://scope.dmace.keenetic.pro/",
+  "profile_data_folder": "Scope",
+  "web_engine_profile_name": "ScopeApp",
+  "executable_basename": "Scope",
+  "build_ico_path": "scope.ico",
+  "icon_path": "branding/scope.ico"
+}

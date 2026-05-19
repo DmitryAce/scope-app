@@ -5,7 +5,15 @@
       <stop offset="100%" style="stop-color:#6B1D32"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
-  <text x="16" y="23" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white" text-anchor="middle">S</text>
+  <rect width="32" height="32" rx="6" ry="6" fill="url(#bg)"/>
+  <text
+    x="16"
+    y="16"
+    font-family="Arial, Helvetica, Segoe UI, sans-serif"
+    font-size="20"
+    font-weight="700"
+    fill="#ffffff"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >S</text>
 </svg>
-
