@@ -19,7 +19,7 @@
         <!-- Боковая панель -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <a href="{% url 'scope:dashboard' %}" class="logo">
+                <a href="{% url 'scope:home' %}" class="logo" title="Главная">
                     <span class="logo-icon">S</span>
                     <span class="logo-text"><span style="margin-left: -7px;">scope</span></span>
                 </a>
@@ -91,8 +91,6 @@
                 </div>
             </nav>
 
-            {% include 'scope/includes/budget_sidebar.html' %}
-            
             <div class="sidebar-footer">
                 <div class="user-info">
                     <div class="user-avatar">{{ user.username|slice:":1"|upper }}</div>
@@ -129,7 +127,7 @@
                         <i class="ri-search-line"></i>
                         <input type="text" placeholder="Поиск задач..." id="searchInput" autocomplete="off">
                     </div>
-                    <button type="button" class="btn btn-primary header-btn-new-task" onclick="openTaskModal()" title="Новая задача" aria-label="Новая задача">
+                    <button type="button" class="btn btn-primary header-btn-new-task" data-open-task-modal title="Новая задача" aria-label="Новая задача">
                         <i class="ri-add-line" aria-hidden="true"></i>
                         <span class="header-new-task-text">Новая задача</span>
                     </button>

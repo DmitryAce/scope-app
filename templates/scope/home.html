@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="home-dashboard">
+    <header class="home-hero">
+        <p class="home-hero-greeting">Привет, {{ user.get_short_name|default:user.username }}</p>
+        <h2 class="home-hero-title">Твой день в Scope</h2>
+        <p class="home-hero-sub">Сводка прогресса и короткая мотивация — без лишнего шума на страницах задач.</p>
+    </header>
+
+    <div class="stats-widget home-stats-widget" id="statsWidget">
+        <div class="stats-cards">
+            <div class="stat-card stat-streak">
+                <div class="stat-icon">{{ stats.streak_icon }}</div>
+                <div class="stat-info">
+                    <span class="stat-number">{{ stats.streak }}</span>
+                    <span class="stat-label">{{ stats.streak_label }} подряд</span>
+                </div>
+            </div>
+            <div class="stat-card stat-today-done">
+                <div class="stat-icon"><i class="ri-check-double-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-number">{{ stats.completed_today }}</span>
+                    <span class="stat-label">сегодня</span>
+                </div>
+            </div>
+            <div class="stat-card stat-week-done">
+                <div class="stat-icon"><i class="ri-bar-chart-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-number">{{ stats.completed_this_week }}</span>
+                    <span class="stat-label">за неделю</span>
+                </div>
+            </div>
+            {% if stats.overdue > 0 %}
+            <div class="stat-card stat-overdue">
+                <div class="stat-icon"><i class="ri-alarm-warning-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-number">{{ stats.overdue }}</span>
+                    <span class="stat-label">просрочено</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="stats-quote home-stats-quote">
+            <i class="ri-lightbulb-flash-line"></i>
+            <span>{{ stats.motivation_quote }}</span>
+        </div>
+    </div>
+
+    <div class="home-overview">
+        <div class="home-overview-card">
+            <span class="home-overview-value">{{ stats.today_tasks }}</span>
+            <span class="home-overview-label">активных на сегодня</span>
+        </div>
+        <div class="home-overview-card">
+            <span class="home-overview-value">{{ stats.total_active }}</span>
+            <span class="home-overview-label">всего активных</span>
+        </div>
+        <div class="home-overview-card">
+            <span class="home-overview-value">{{ stats.total_completed }}</span>
+            <span class="home-overview-label">завершено всего</span>
+        </div>
+    </div>
+
+    <div class="home-quick-links">
+        <a href="{% url 'scope:today' %}" class="home-quick-link">
+            <i class="ri-calendar-todo-line"></i>
+            <span>Сегодня</span>
+            {% if today_count %}<span class="badge">{{ today_count }}</span>{% endif %}
+        </a>
+        <a href="{% url 'scope:dashboard' %}" class="home-quick-link">
+            <i class="ri-inbox-line"></i>
+            <span>Все задачи</span>
+            {% if all_count %}<span class="badge">{{ all_count }}</span>{% endif %}
+        </a>
+        <a href="{% url 'scope:calendar' %}" class="home-quick-link">
+            <i class="ri-calendar-line"></i>
+            <span>Календарь</span>
+        </a>
+        <a href="{% url 'scope:bullet_tasks' %}" class="home-quick-link">
+            <i class="ri-seedling-line"></i>
+            <span>BulletTasks</span>
+        </a>
+    </div>
+</div>
+{% endblock %}

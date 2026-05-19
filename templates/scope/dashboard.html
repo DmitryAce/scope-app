@@ -2,22 +2,6 @@
 
 {% block content %}
 <div class="dashboard">
-    <!-- Stats Widget -->
-    <div class="stats-widget" id="statsWidget"></div>
-
-    <!-- Quick Add -->
-    <div class="quick-add">
-        <input type="text" 
-               id="quickAddInput" 
-               class="quick-add-input" 
-               placeholder="Добавить задачу... (нажмите Enter)"
-               autocomplete="off">
-        <button class="btn btn-primary" onclick="quickAddTask()">
-            <i class="ri-add-line"></i>
-        </button>
-    </div>
-    
-    <!-- Active Tasks -->
     <div class="task-section">
         <div class="task-section-header">
             <h2 class="task-section-title">Активные задачи</h2>
@@ -77,17 +61,16 @@
                 <i class="ri-checkbox-circle-line"></i>
             </div>
             <h3 class="empty-state-title">Нет активных задач</h3>
-            <p class="empty-state-text">Добавьте новую задачу, чтобы начать работу</p>
-            <button class="btn btn-primary" onclick="openTaskModal()">
+            <p class="empty-state-text">Создайте задачу кнопкой «Новая задача» в шапке</p>
+            <button type="button" class="btn btn-primary" data-open-task-modal>
                 <i class="ri-add-line"></i>
-                Создать задачу
+                Новая задача
             </button>
         </div>
         {% endif %}
     </div>
     
     {% if completed_tasks %}
-    <!-- Completed Tasks -->
     <div class="task-section">
         <div class="task-section-header">
             <h2 class="task-section-title">Завершённые</h2>
@@ -119,4 +102,3 @@
     {% endif %}
 </div>
 {% endblock %}
-

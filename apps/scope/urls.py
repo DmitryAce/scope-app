@@ -5,8 +5,10 @@ app_name = 'scope'
 
 urlpatterns = [
     path('api/v2/', include('apps.scope.api_v2.urls')),
-    # Главная страница - Все задачи
-    path('', views.dashboard, name='dashboard'),
+    # Главная — дашборд со статистикой
+    path('', views.home, name='home'),
+    # Все задачи
+    path('tasks/', views.dashboard, name='dashboard'),
     
     # Сегодня
     path('today/', views.today_view, name='today'),

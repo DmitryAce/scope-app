@@ -2,25 +2,7 @@
 
 {% block content %}
 <div class="today-view">
-    <!-- Stats Widget -->
-    <div class="stats-widget" id="statsWidget"></div>
-
-    <!-- Quick Add -->
-    <div class="quick-add">
-        <input type="text" 
-               id="quickAddInput" 
-               class="quick-add-input" 
-               placeholder="Добавить задачу на сегодня..."
-               data-due-date="{{ today|date:'Y-m-d' }}"
-               data-project=""
-               autocomplete="off">
-        <button class="btn btn-primary" onclick="quickAddTask()">
-            <i class="ri-add-line"></i>
-        </button>
-    </div>
-    
     {% if overdue_tasks %}
-    <!-- Overdue Tasks -->
     <div class="task-section">
         <div class="task-section-header">
             <h2 class="task-section-title" style="color: var(--priority-urgent)">
@@ -56,7 +38,6 @@
     </div>
     {% endif %}
     
-    <!-- Today's Tasks -->
     <div class="task-section">
         <div class="task-section-header">
             <h2 class="task-section-title">
@@ -101,14 +82,13 @@
                 <i class="ri-sun-line"></i>
             </div>
             <h3 class="empty-state-title">На сегодня задач нет</h3>
-            <p class="empty-state-text">Отличный день чтобы отдохнуть или добавить новые задачи</p>
-            <button class="btn btn-primary" onclick="openTaskModal()">
+            <p class="empty-state-text">Отличный день, чтобы отдохнуть, или создайте задачу кнопкой «Новая задача»</p>
+            <button type="button" class="btn btn-primary" data-open-task-modal>
                 <i class="ri-add-line"></i>
-                Добавить задачу
+                Новая задача
             </button>
         </div>
         {% endif %}
     </div>
 </div>
 {% endblock %}
-

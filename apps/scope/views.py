@@ -40,9 +40,6 @@ def get_sidebar_context(user):
         ).count(),
         'all_count': Task.objects.filter(user=user, is_completed=False).count(),
     }
-    today = timezone.now().date()
-    ctx['budget_sidebar'] = compute_budget_summary(user, today.year, today.month)
-    ctx['daily_budget_active_period_id'] = active_daily_budget_period_id(user)
     return ctx
 
 
@@ -148,9 +145,94 @@ def _parse_json(request):
 # Главные страницы
 # ==================
 
+MOTIVATION_QUOTES = (
+    'Каждая завершённая задача — шаг к цели',
+    'Маленькие шаги ведут к большим результатам',
+    'Фокус — ключ к продуктивности',
+    'Ты на верном пути!',
+    'Сегодня отличный день для свершений',
+    'Дисциплина — это свобода',
+    'Делай то, что важно прямо сейчас',
+)
+
+
+def pluralize_ru(n: int, one: str, few: str, many: str) -> str:
+    n = abs(int(n)) % 100
+    n1 = n % 10
+    if 11 <= n <= 19:
+        return many
+    if n1 == 1:
+        return one
+    if 2 <= n1 <= 4:
+        return few
+    return many
+
+
+def compute_productivity_stats(user):
+    """Статистика продуктивности (главная + API)."""
+    today = timezone.now().date()
+    week_start = today - timedelta(days=today.weekday())
+
+    completed_today = Task.objects.filter(
+        user=user, is_completed=True, completed_at__date=today
+    ).count()
+    completed_this_week = Task.objects.filter(
+        user=user, is_completed=True, completed_at__date__gte=week_start
+    ).count()
+    total_active = Task.objects.filter(user=user, is_completed=False).count()
+    total_completed = Task.objects.filter(user=user, is_completed=True).count()
+    overdue = Task.objects.filter(
+        user=user, is_completed=False, due_date__lt=today
+    ).count()
+    today_tasks = Task.objects.filter(
+        user=user, is_completed=False, due_date=today
+    ).count()
+
+    streak = 0
+    check_date = today
+    while True:
+        if Task.objects.filter(user=user, is_completed=True, completed_at__date=check_date).exists():
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+
+    streak_icon = '✨'
+    if streak >= 7:
+        streak_icon = '🔥'
+    elif streak >= 3:
+        streak_icon = '⚡'
+
+    return {
+        'completed_today': completed_today,
+        'completed_this_week': completed_this_week,
+        'total_active': total_active,
+        'total_completed': total_completed,
+        'overdue': overdue,
+        'today_tasks': today_tasks,
+        'streak': streak,
+        'streak_icon': streak_icon,
+        'streak_label': pluralize_ru(streak, 'день', 'дня', 'дней'),
+        'motivation_quote': MOTIVATION_QUOTES[today.weekday() % len(MOTIVATION_QUOTES)],
+    }
+
+
+@login_required
+def home(request):
+    """Главная: статистика и мотивация (по клику на логотип)."""
+    stats = compute_productivity_stats(request.user)
+    context = {
+        'stats': stats,
+        'page_title': 'Главная',
+        'current_page': 'home',
+        **get_sidebar_context(request.user),
+    }
+    return render(request, 'scope/home.html', context)
+
+
 @login_required
 def dashboard(request):
-    """Главная страница - все задачи"""
+    """Все задачи"""
     tasks = Task.objects.filter(user=request.user, is_completed=False)
     completed_tasks = Task.objects.filter(user=request.user, is_completed=True)[:10]
     
@@ -962,42 +1044,15 @@ def task_kanban_reorder(request, pk):
 @require_GET
 def api_stats(request):
     """API статистики продуктивности"""
-    user = request.user
-    today = timezone.now().date()
-    week_start = today - timedelta(days=today.weekday())
-
-    completed_today = Task.objects.filter(
-        user=user, is_completed=True, completed_at__date=today
-    ).count()
-    completed_this_week = Task.objects.filter(
-        user=user, is_completed=True, completed_at__date__gte=week_start
-    ).count()
-    total_active = Task.objects.filter(user=user, is_completed=False).count()
-    total_completed = Task.objects.filter(user=user, is_completed=True).count()
-    overdue = Task.objects.filter(
-        user=user, is_completed=False, due_date__lt=today
-    ).count()
-    today_tasks = Task.objects.filter(
-        user=user, is_completed=False, due_date=today
-    ).count()
-
-    streak = 0
-    check_date = today
-    while True:
-        if Task.objects.filter(user=user, is_completed=True, completed_at__date=check_date).exists():
-            streak += 1
-            check_date -= timedelta(days=1)
-        else:
-            break
-
+    data = compute_productivity_stats(request.user)
     return JsonResponse({
-        'completed_today': completed_today,
-        'completed_this_week': completed_this_week,
-        'total_active': total_active,
-        'total_completed': total_completed,
-        'overdue': overdue,
-        'today_tasks': today_tasks,
-        'streak': streak,
+        'completed_today': data['completed_today'],
+        'completed_this_week': data['completed_this_week'],
+        'total_active': data['total_active'],
+        'total_completed': data['total_completed'],
+        'overdue': data['overdue'],
+        'today_tasks': data['today_tasks'],
+        'streak': data['streak'],
     })
 
 

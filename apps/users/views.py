@@ -7,7 +7,7 @@ def login_view(request):
     """Login page view"""
     # If already logged in, redirect to dashboard
     if request.user.is_authenticated:
-        return redirect('scope:dashboard')
+        return redirect('scope:home')
     
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -24,7 +24,7 @@ def login_view(request):
                 request.session.set_expiry(0)  # Browser close
             
             # Redirect to next URL or dashboard
-            next_url = request.GET.get('next', 'scope:dashboard')
+            next_url = request.GET.get('next', 'scope:home')
             return redirect(next_url)
         else:
             messages.error(request, 'Неверный логин или пароль')

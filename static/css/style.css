@@ -2243,6 +2243,11 @@ tr.daily-ledger-neg td:last-child {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
+    z-index: 10050;
+}
+
+body.modal-open {
+    overflow: hidden;
 }
 
 .modal-overlay {
@@ -2952,6 +2957,118 @@ select.form-input:not([multiple]) {
     font-size: 16px;
     color: var(--accent-secondary);
     flex-shrink: 0;
+}
+
+/* Главная (дашборд по логотипу) */
+.home-dashboard {
+    max-width: 960px;
+}
+
+.home-hero {
+    margin-bottom: 28px;
+}
+
+.home-hero-greeting {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.home-hero-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+}
+
+.home-hero-sub {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 520px;
+    line-height: 1.5;
+}
+
+.home-stats-widget .stats-cards {
+    margin-bottom: 16px;
+}
+
+.home-stats-quote {
+    font-size: 15px;
+    padding: 14px 18px;
+}
+
+.home-overview {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 28px 0;
+}
+
+.home-overview-card {
+    padding: 16px 18px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.home-overview-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.home-overview-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.home-quick-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.home-quick-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.home-quick-link:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+}
+
+.home-quick-link i {
+    font-size: 18px;
+    color: var(--accent-secondary);
+}
+
+.logo.logo-active .logo-icon {
+    box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+@media (max-width: 768px) {
+    .home-overview {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ====================================

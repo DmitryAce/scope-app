@@ -101,7 +101,7 @@ function isSPALink(href) {
         const url = new URL(href, location.origin);
         if (url.origin !== location.origin) return false;
         const p = url.pathname;
-        if (['/', '/today/', '/calendar/', '/bullet-tasks/', '/budget/', '/projects/', '/tags/'].includes(p)) return true;
+        if (['/', '/tasks/', '/today/', '/calendar/', '/bullet-tasks/', '/budget/', '/projects/', '/tags/'].includes(p)) return true;
         if (/^\/projects\/\d+\/$/.test(p)) return true;
         if (/^\/projects\/\d+\/edit\/$/.test(p)) return true;
         if (/^\/tasks\/\d+\/$/.test(p)) return true;
@@ -195,9 +195,8 @@ function reinitPage() {
             if (e.key === 'Enter') { e.preventDefault(); quickAddTask(); }
         });
     }
-    // Stats widget
     const widget = document.getElementById('statsWidget');
-    if (widget) loadStatsWidget();
+    if (widget && widget.dataset.live === '1') loadStatsWidget();
     initBudgetPage();
 }
 
@@ -208,10 +207,14 @@ function updateActiveNav(url) {
         if (!href) return;
         a.classList.toggle('active', href === path || (path.startsWith(href) && href !== '/' && href.length > 1));
     });
-    // Exact match for "/" (dashboard)
-    const dashLink = document.querySelector('.sidebar-nav .nav-item[href="/"]');
-    if (dashLink) {
-        dashLink.classList.toggle('active', path === '/' || path.startsWith('/?'));
+    const homeLink = document.querySelector('.sidebar .logo[href]');
+    if (homeLink) {
+        homeLink.classList.toggle('logo-active', path === '/' || path.startsWith('/?'));
+    }
+    const tasksLink = document.querySelector('.sidebar-nav .nav-item[href*="/tasks"]');
+    if (tasksLink) {
+        const tasksPath = new URL(tasksLink.href, location.origin).pathname;
+        tasksLink.classList.toggle('active', path === tasksPath || path.startsWith(tasksPath + '?'));
     }
     document.querySelectorAll('.nav-section-link').forEach(a => {
         const href = a.getAttribute('href');
@@ -302,26 +305,42 @@ function refreshModalProjectSelect(projects) {
 function openTaskModal(defaults = {}) {
     const modal = document.getElementById('taskModal');
     if (!modal) return;
+
+    document.querySelectorAll('.modal.active').forEach((m) => {
+        if (m !== modal) m.classList.remove('active');
+    });
+
     modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+
     const form = document.getElementById('taskForm');
 
     if (defaults.project) {
         const input = document.getElementById('taskProjectInput');
         if (input) input.value = defaults.project;
-        const opt = document.querySelector(`#taskProjectDropdown .custom-select-option[data-value="${defaults.project}"]`);
+        const opt = document.querySelector(
+            `#taskProjectDropdown .custom-select-option[data-value="${defaults.project}"]`,
+        );
         if (opt) pickProject(opt);
     }
-    if (defaults.due_date) {
+    if (defaults.due_date && form) {
         const i = form.querySelector('input[name="due_date"]');
         if (i) i.value = defaults.due_date;
     }
 
-    setTimeout(() => form.querySelector('input[name="title"]')?.focus(), 100);
+    setTimeout(() => form?.querySelector('input[name="title"]')?.focus(), 100);
 }
 
 function closeTaskModal() {
     const m = document.getElementById('taskModal');
-    if (m) m.classList.remove('active');
+    if (m) {
+        m.classList.remove('active');
+        m.setAttribute('aria-hidden', 'true');
+    }
+    if (!document.querySelector('.modal.active')) {
+        document.body.classList.remove('modal-open');
+    }
     const f = document.getElementById('taskForm');
     if (f) f.reset();
 
@@ -347,6 +366,26 @@ function closeTaskModal() {
         const first = dd.querySelector('.custom-select-option');
         if (first) first.classList.add('selected');
     }
+}
+
+function initTaskModalTriggers() {
+    if (document.body.dataset.taskModalTriggersBound === '1') return;
+    document.body.dataset.taskModalTriggersBound = '1';
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-open-task-modal]');
+        if (!btn) return;
+        e.preventDefault();
+        let defaults = {};
+        const raw = btn.getAttribute('data-task-defaults');
+        if (raw) {
+            try {
+                defaults = JSON.parse(raw);
+            } catch {
+                defaults = {};
+            }
+        }
+        openTaskModal(defaults);
+    });
 }
 
 function openProjectModal() {
@@ -446,7 +485,17 @@ function initFormHandlers() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', initFormHandlers);
+document.addEventListener('DOMContentLoaded', () => {
+    initFormHandlers();
+    initTaskModalTriggers();
+});
+
+window.openTaskModal = openTaskModal;
+window.closeTaskModal = closeTaskModal;
+window.openProjectModal = openProjectModal;
+window.closeProjectModal = closeProjectModal;
+window.openTagModal = openTagModal;
+window.closeTagModal = closeTagModal;
 
 // ====================================
 // SIDEBAR LIVE UPDATE
@@ -611,7 +660,7 @@ async function deleteTask(taskId) {
             refreshSidebar();
             refreshKanbanIfOnCalendar();
             if (location.pathname.match(/^\/tasks\/\d+\/$/)) {
-                setTimeout(() => spaNavigate('/'), 400);
+                setTimeout(() => spaNavigate('/tasks/'), 400);
             }
         }
     } catch { showToast('Ошибка при удалении', 'error'); }

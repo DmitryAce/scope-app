@@ -181,7 +181,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Authentication Settings
 # ===========================
 LOGIN_URL = 'users:login'
-LOGIN_REDIRECT_URL = 'scope:dashboard'
+LOGIN_REDIRECT_URL = 'scope:home'
 LOGOUT_REDIRECT_URL = 'users:login'
 
 # Session settings (keep user logged in)
