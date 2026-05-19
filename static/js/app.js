@@ -42,6 +42,9 @@ async function apiFetch(url, opts = {}) {
     if (opts.body && typeof opts.body === 'string') {
         defaults.headers['Content-Type'] = 'application/x-www-form-urlencoded';
     }
+    if (opts.body instanceof FormData) {
+        delete defaults.headers['Content-Type'];
+    }
     const merged = { ...defaults, ...opts, headers: { ...defaults.headers, ...opts.headers } };
     let res;
     try {
@@ -453,6 +456,7 @@ function openTaskModal(defaults = {}) {
         if (i) i.value = defaults.due_date;
     }
 
+    resetCreateChecklistDraft();
     setTimeout(() => form?.querySelector('input[name="title"]')?.focus(), 100);
 }
 
@@ -491,6 +495,189 @@ function closeTaskModal() {
         const first = dd.querySelector('.custom-select-option');
         if (first) first.classList.add('selected');
     }
+    resetCreateChecklistDraft();
+}
+
+function resetCreateChecklistDraft() {
+    const list = document.getElementById('createChecklistDraft');
+    if (!list) return;
+    list.innerHTML = '';
+    addCreateChecklistRow();
+}
+
+function addCreateChecklistRow(value = '') {
+    const list = document.getElementById('createChecklistDraft');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'checklist-draft-row';
+    row.innerHTML = `
+        <input type="text" class="form-input" name="checklist_items" value="${escapeHtml(value)}" placeholder="Пункт чек-листа" maxlength="500">
+        <button type="button" class="btn-icon checklist-draft-remove" title="Убрать"><i class="ri-close-line"></i></button>`;
+    row.querySelector('.checklist-draft-remove')?.addEventListener('click', () => {
+        row.remove();
+        if (!list.children.length) addCreateChecklistRow();
+    });
+    list.appendChild(row);
+}
+
+let _taskEditorId = null;
+
+async function openTaskEditor(taskId) {
+    const modal = document.getElementById('taskEditorModal');
+    const body = document.getElementById('taskEditorBody');
+    const footer = document.getElementById('taskEditorFooter');
+    if (!modal || !body) return;
+
+    _taskEditorId = taskId;
+    document.querySelectorAll('.modal.active').forEach((m) => {
+        if (m !== modal) m.classList.remove('active');
+    });
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    if (footer) footer.hidden = true;
+    const detailBtn = document.getElementById('taskEditorOpenDetailBtn');
+    if (detailBtn) detailBtn.hidden = true;
+    body.innerHTML = '<div class="task-editor-loading"><i class="ri-loader-4-line spin"></i> Загрузка...</div>';
+
+    try {
+        const data = await apiFetch(`/api/tasks/${taskId}/editor/`);
+        if (!data.success || !data.html) throw new Error('Нет данных');
+        body.innerHTML = data.html;
+        const titleEl = document.getElementById('taskEditorModalTitle');
+        if (titleEl) titleEl.textContent = data.title || 'Задача';
+        if (footer) footer.hidden = false;
+        if (detailBtn) {
+            detailBtn.hidden = false;
+            detailBtn.onclick = () => openTaskDetailPage(taskId);
+        }
+        initTaskEditorPanel(taskId);
+    } catch {
+        body.innerHTML = '<p class="task-editor-error">Не удалось загрузить задачу</p>';
+        showToast('Ошибка загрузки', 'error');
+    }
+}
+
+function openTaskDetailPage(taskId) {
+    const url = `/tasks/${taskId}/`;
+    closeTaskEditor();
+    spaNavigate(url);
+}
+
+function closeTaskEditor() {
+    const modal = document.getElementById('taskEditorModal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    const detailBtn = document.getElementById('taskEditorOpenDetailBtn');
+    if (detailBtn) detailBtn.hidden = true;
+    _taskEditorId = null;
+    if (!document.querySelector('.modal.active')) {
+        document.body.classList.remove('modal-open');
+    }
+}
+
+function initTaskEditorPanel(taskId) {
+    const done = document.getElementById('editorTaskDone');
+    if (done) {
+        done.onchange = async () => {
+            try {
+                const data = await apiFetch(`/tasks/${taskId}/toggle/`, { method: 'POST' });
+                if (data.success) showToast(data.is_completed ? 'Завершено' : 'Возвращено', 'success');
+                refreshKanbanIfOnCalendar();
+                refreshSidebar();
+            } catch { showToast('Ошибка', 'error'); }
+        };
+    }
+    const saveBtn = document.getElementById('taskEditorSaveBtn');
+    if (saveBtn) saveBtn.onclick = () => submitTaskEditor(taskId);
+    const delBtn = document.getElementById('taskEditorDeleteBtn');
+    if (delBtn) delBtn.onclick = async () => {
+        closeTaskEditor();
+        await deleteTask(taskId);
+    };
+}
+
+async function submitTaskEditor(taskId) {
+    const form = document.getElementById('taskEditorForm');
+    if (!form) return;
+    const fd = new FormData(form);
+    try {
+        const data = await apiFetch(`/api/tasks/${taskId}/editor/save/`, { method: 'POST', body: fd });
+        if (data.success) {
+            showToast('Сохранено');
+            closeTaskEditor();
+            refreshKanbanIfOnCalendar();
+            refreshSidebar();
+            if (!location.pathname.startsWith('/calendar')) softReloadContent();
+        }
+    } catch { showToast('Ошибка сохранения', 'error'); }
+}
+
+function updateEditorChecklistProgress(progress) {
+    const wrap = document.getElementById('editorChecklistProgress');
+    const bar = document.getElementById('editorChecklistBar');
+    const text = document.getElementById('editorChecklistProgressText');
+    if (!progress || !progress.total) {
+        if (wrap) wrap.style.display = 'none';
+        return;
+    }
+    if (wrap) wrap.style.display = '';
+    if (bar) bar.style.width = `${progress.percent}%`;
+    if (text) text.textContent = `${progress.completed}/${progress.total}`;
+}
+
+async function addEditorChecklistItem() {
+    const taskId = _taskEditorId;
+    const input = document.getElementById('editorChecklistInput');
+    if (!taskId || !input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/checklist/add/`, {
+            method: 'POST',
+            body: `text=${encodeURIComponent(text)}`,
+        });
+        if (data.success) {
+            const cl = document.getElementById('editorChecklist');
+            const addRow = cl?.querySelector('.checklist-add');
+            const ni = createChecklistItemElement(data.id, data.text, 'editor');
+            if (cl && addRow) cl.insertBefore(ni, addRow);
+            input.value = '';
+            refreshEditorChecklistProgress();
+        }
+    } catch { showToast('Ошибка', 'error'); }
+}
+
+async function toggleEditorChecklistItem(itemId) {
+    try {
+        const data = await apiFetch(`/checklist/${itemId}/toggle/`, { method: 'POST' });
+        if (data.success) {
+            const item = document.querySelector(`#editorChecklist .checklist-item[data-id="${itemId}"]`);
+            if (item) item.classList.toggle('completed', data.is_completed);
+            if (data.progress) updateEditorChecklistProgress(data.progress);
+        }
+    } catch { showToast('Ошибка', 'error'); }
+}
+
+async function deleteEditorChecklistItem(itemId) {
+    try {
+        const data = await apiFetch(`/checklist/${itemId}/delete/`, { method: 'POST' });
+        if (data.success) {
+            const item = document.querySelector(`#editorChecklist .checklist-item[data-id="${itemId}"]`);
+            if (item) item.remove();
+            if (data.progress) updateEditorChecklistProgress(data.progress);
+            else document.getElementById('editorChecklistProgress')?.style.setProperty('display', 'none');
+        }
+    } catch { showToast('Ошибка', 'error'); }
+}
+
+function refreshEditorChecklistProgress() {
+    const items = document.querySelectorAll('#editorChecklist .checklist-item');
+    const total = items.length;
+    const completed = document.querySelectorAll('#editorChecklist .checklist-item.completed').length;
+    if (total > 0) updateEditorChecklistProgress({ completed, total, percent: Math.round((completed / total) * 100) });
 }
 
 function initTaskModalTriggers() {
@@ -544,7 +731,12 @@ function closeTagModal() {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeTaskModal(); closeProjectModal(); closeTagModal(); }
+    if (e.key === 'Escape') {
+        closeTaskEditor();
+        closeTaskModal();
+        closeProjectModal();
+        closeTagModal();
+    }
 });
 
 // AJAX form handlers
@@ -555,9 +747,8 @@ function initFormHandlers() {
         taskForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(taskForm);
-            const body = new URLSearchParams(fd).toString();
             try {
-                const data = await apiFetch(taskForm.action, { method: 'POST', body });
+                const data = await apiFetch(taskForm.action, { method: 'POST', body: fd });
                 if (data.success) {
                     closeTaskModal();
                     showToast('Задача создана');
@@ -613,6 +804,7 @@ function initFormHandlers() {
 document.addEventListener('DOMContentLoaded', () => {
     initFormHandlers();
     initTaskModalTriggers();
+    resetCreateChecklistDraft();
 });
 
 window.openTaskModal = openTaskModal;
@@ -623,6 +815,13 @@ window.openProjectModal = openProjectModal;
 window.closeProjectModal = closeProjectModal;
 window.openTagModal = openTagModal;
 window.closeTagModal = closeTagModal;
+window.openTaskEditor = openTaskEditor;
+window.closeTaskEditor = closeTaskEditor;
+window.openTaskDetailPage = openTaskDetailPage;
+window.addCreateChecklistRow = addCreateChecklistRow;
+window.addEditorChecklistItem = addEditorChecklistItem;
+window.toggleEditorChecklistItem = toggleEditorChecklistItem;
+window.deleteEditorChecklistItem = deleteEditorChecklistItem;
 
 // ====================================
 // SIDEBAR LIVE UPDATE
@@ -772,6 +971,7 @@ async function toggleTask(taskId) {
                 refreshSidebar();
             }
             if (location.pathname === '/calendar/') refreshKanbanIfOnCalendar();
+            if (_taskEditorId === taskId) closeTaskEditor();
         }
     } catch { showToast('Ошибка', 'error'); }
 }
@@ -786,9 +986,11 @@ async function deleteTask(taskId) {
             showToast('Задача удалена');
             refreshSidebar();
             refreshKanbanIfOnCalendar();
+            if (_taskEditorId === taskId) closeTaskEditor();
             if (location.pathname.match(/^\/tasks\/\d+\/$/)) {
                 setTimeout(() => spaNavigate('/tasks/'), 400);
             }
+            refreshKanbanIfOnCalendar();
         }
     } catch { showToast('Ошибка при удалении', 'error'); }
 }
@@ -895,10 +1097,15 @@ async function deleteChecklistItem(itemId) {
     } catch { showToast('Ошибка', 'error'); }
 }
 
-function createChecklistItemElement(id, text) {
+function createChecklistItemElement(id, text, scope = 'detail') {
     const div = document.createElement('div');
-    div.className = 'checklist-item'; div.dataset.id = id;
-    div.innerHTML = `<div class="task-checkbox"><input type="checkbox" id="check-${id}" onchange="toggleChecklistItem(${id})"><label for="check-${id}"></label></div><span class="checklist-text">${escapeHtml(text)}</span><button class="btn-icon checklist-delete" onclick="deleteChecklistItem(${id})"><i class="ri-close-line"></i></button>`;
+    div.className = 'checklist-item';
+    div.dataset.id = id;
+    if (scope === 'editor') {
+        div.innerHTML = `<div class="task-checkbox"><input type="checkbox" id="editor-check-${id}" onchange="toggleEditorChecklistItem(${id})"><label for="editor-check-${id}"></label></div><span class="checklist-text">${escapeHtml(text)}</span><button type="button" class="btn-icon checklist-delete" onclick="deleteEditorChecklistItem(${id})"><i class="ri-close-line"></i></button>`;
+    } else {
+        div.innerHTML = `<div class="task-checkbox"><input type="checkbox" id="check-${id}" onchange="toggleChecklistItem(${id})"><label for="check-${id}"></label></div><span class="checklist-text">${escapeHtml(text)}</span><button class="btn-icon checklist-delete" onclick="deleteChecklistItem(${id})"><i class="ri-close-line"></i></button>`;
+    }
     return div;
 }
 
@@ -2086,3 +2293,4 @@ document.addEventListener('click', (e) => {
         void loadHistory();
     }
 })();
+

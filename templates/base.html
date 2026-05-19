@@ -208,6 +208,13 @@
                             <input type="time" name="due_time" class="form-input">
                         </div>
                     </div>
+                    <div class="form-group task-create-checklist-wrap">
+                        <label class="form-label"><i class="ri-checkbox-multiple-line"></i> Чек-лист</label>
+                        <div id="createChecklistDraft" class="checklist-draft-list"></div>
+                        <button type="button" class="btn btn-ghost btn-sm checklist-draft-add" onclick="addCreateChecklistRow()">
+                            <i class="ri-add-line"></i> Добавить пункт
+                        </button>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" onclick="closeTaskModal()">Отмена</button>
@@ -216,7 +223,33 @@
             </form>
         </div>
     </div>
-    
+
+    <div class="modal" id="taskEditorModal" aria-hidden="true">
+        <div class="modal-overlay" onclick="closeTaskEditor()"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header task-editor-modal-header">
+                <h2 id="taskEditorModalTitle">Задача</h2>
+                <div class="task-editor-modal-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="taskEditorOpenDetailBtn" hidden title="Открыть страницу задачи">
+                        <i class="ri-external-link-line"></i> Подробнее
+                    </button>
+                    <button type="button" class="btn-icon" onclick="closeTaskEditor()" title="Закрыть">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body" id="taskEditorBody">
+                <div class="task-editor-loading"><i class="ri-loader-4-line spin"></i> Загрузка...</div>
+            </div>
+            <div class="modal-footer task-editor-footer" id="taskEditorFooter" hidden>
+                <button type="button" class="btn btn-ghost" style="color: var(--priority-urgent)" id="taskEditorDeleteBtn">Удалить</button>
+                <div class="task-editor-footer-right">
+                    <button type="button" class="btn btn-ghost" onclick="closeTaskEditor()">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="taskEditorSaveBtn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Модальное окно создания проекта -->
     <div class="modal" id="projectModal">
         <div class="modal-overlay" onclick="closeProjectModal()"></div>
@@ -375,4 +408,6 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
+
+
 

@@ -1338,7 +1338,7 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 /* Task card in kanban */
 .kanban-task {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 6px;
     padding: 6px 8px;
     background: var(--bg-tertiary);
@@ -1382,10 +1382,10 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 
 .kanban-task-priority {
     width: 3px;
+    align-self: stretch;
     min-height: 16px;
     border-radius: 2px;
     flex-shrink: 0;
-    margin-top: 2px;
 }
 
 .kanban-task-body {
@@ -1435,6 +1435,7 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     display: flex;
     align-items: center;
     justify-content: center;
+    align-self: center;
     color: var(--text-muted);
     cursor: pointer;
     border-radius: 50%;
@@ -1442,6 +1443,14 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     background: none;
     border: none;
     font-size: 14px;
+    padding: 0;
+    line-height: 1;
+}
+
+.kanban-task-check i {
+    display: block;
+    line-height: 1;
+    font-size: 16px;
 }
 
 .kanban-task-check:hover {
@@ -2308,6 +2317,119 @@ body.modal-open {
 .modal-sm .modal-content,
 .modal-content.modal-sm {
     max-width: 400px;
+}
+
+.modal-content.modal-lg {
+    max-width: 640px;
+    max-height: min(92vh, 900px);
+}
+
+.task-editor-modal-header {
+    gap: 12px;
+}
+
+.task-editor-modal-header h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.task-editor-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.task-editor-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.task-editor-checkbox.task-checkbox {
+    margin-top: 0;
+    align-self: center;
+}
+
+.task-editor-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-editor-section {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-light);
+}
+
+.task-editor-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.task-editor-section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 !important;
+}
+
+.task-editor-footer {
+    justify-content: space-between;
+}
+
+.task-editor-footer-right {
+    display: flex;
+    gap: 10px;
+}
+
+.task-editor-loading,
+.task-editor-error {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 32px 16px;
+}
+
+.checklist-draft-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.checklist-draft-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.checklist-draft-row .form-input {
+    flex: 1;
+}
+
+.checklist-draft-add {
+    margin-top: 4px;
+}
+
+button.kanban-task-title {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+button.kanban-task-title:hover {
+    color: var(--accent-primary);
 }
 
 .modal-header {

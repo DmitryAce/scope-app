@@ -1,0 +1,83 @@
+<form id="taskEditorForm" class="task-editor-form" data-task-id="{{ task.id }}" autocomplete="off">
+    <div class="task-editor-header">
+        <div class="task-checkbox task-editor-checkbox" title="Отметить выполненной">
+            <input type="checkbox" id="editorTaskDone" {% if task.is_completed %}checked{% endif %}>
+            <label for="editorTaskDone"></label>
+        </div>
+        <input type="text" class="form-input form-input-lg task-editor-title" name="title" value="{{ task.title }}" required>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Описание</label>
+        <textarea name="description" class="form-input" rows="3" placeholder="Описание задачи">{{ task.description }}</textarea>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-label">Проект</label>
+            <select name="project" class="form-input">
+                <option value="">Без проекта</option>
+                {% for project in projects %}
+                <option value="{{ project.id }}" {% if task.project_id == project.id %}selected{% endif %}>{{ project.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Приоритет</label>
+            <input type="hidden" name="priority" id="editorPriorityInput" value="{{ task.priority }}">
+            <div class="priority-selector-row editor-priority-row">
+                <button type="button" class="priority-btn {% if task.priority == 1 %}active{% endif %}" data-val="1" onclick="selectPriority(this, 'editorPriorityInput')">
+                    <span class="priority-dot priority-low"></span><span>Низкий</span>
+                </button>
+                <button type="button" class="priority-btn {% if task.priority == 2 %}active{% endif %}" data-val="2" onclick="selectPriority(this, 'editorPriorityInput')">
+                    <span class="priority-dot priority-medium"></span><span>Средний</span>
+                </button>
+                <button type="button" class="priority-btn {% if task.priority == 3 %}active{% endif %}" data-val="3" onclick="selectPriority(this, 'editorPriorityInput')">
+                    <span class="priority-dot priority-high"></span><span>Высокий</span>
+                </button>
+                <button type="button" class="priority-btn {% if task.priority == 4 %}active{% endif %}" data-val="4" onclick="selectPriority(this, 'editorPriorityInput')">
+                    <span class="priority-dot priority-urgent"></span><span>Срочный</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-label">Дата</label>
+            <input type="date" name="due_date" class="form-input" value="{% if task.due_date %}{{ task.due_date|date:'Y-m-d' }}{% endif %}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Время</label>
+            <input type="time" name="due_time" class="form-input" value="{% if task.due_time %}{{ task.due_time|time:'H:i' }}{% endif %}">
+        </div>
+    </div>
+
+    <div class="task-editor-section">
+        <div class="task-editor-section-head">
+            <span class="form-label task-editor-section-label"><i class="ri-checkbox-multiple-line"></i> Чек-лист</span>
+            <span class="task-checklist-progress editor-checklist-progress" id="editorChecklistProgress" {% if not task.checklist_progress %}style="display:none"{% endif %}>
+                <div class="progress-bar" style="width: 80px;">
+                    <div class="progress-bar-fill" id="editorChecklistBar" style="width: {% if task.checklist_progress %}{{ task.checklist_progress.percent }}{% else %}0{% endif %}%"></div>
+                </div>
+                <span class="checklist-progress-text" id="editorChecklistProgressText">{% if task.checklist_progress %}{{ task.checklist_progress.completed }}/{{ task.checklist_progress.total }}{% endif %}</span>
+            </span>
+        </div>
+        <div class="checklist" id="editorChecklist">
+            {% for item in task.checklist_items.all %}
+            <div class="checklist-item {% if item.is_completed %}completed{% endif %}" data-id="{{ item.id }}">
+                <div class="task-checkbox">
+                    <input type="checkbox" id="editor-check-{{ item.id }}" {% if item.is_completed %}checked{% endif %} onchange="toggleEditorChecklistItem({{ item.id }})">
+                    <label for="editor-check-{{ item.id }}"></label>
+                </div>
+                <span class="checklist-text">{{ item.text }}</span>
+                <button type="button" class="btn-icon checklist-delete" onclick="deleteEditorChecklistItem({{ item.id }})"><i class="ri-close-line"></i></button>
+            </div>
+            {% endfor %}
+            <div class="checklist-add">
+                <input type="text" id="editorChecklistInput" class="form-input" placeholder="Добавить пункт..." onkeydown="if(event.key==='Enter'){event.preventDefault();addEditorChecklistItem();}">
+                <button type="button" class="btn btn-ghost" onclick="addEditorChecklistItem()"><i class="ri-add-line"></i></button>
+            </div>
+        </div>
+    </div>
+</form>

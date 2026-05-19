@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.shortcuts import render, get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
@@ -564,6 +565,11 @@ def task_create(request):
         
         if tag_ids:
             task.tags.set(tag_ids)
+
+        for text in request.POST.getlist('checklist_items'):
+            text = (text or '').strip()
+            if text:
+                ChecklistItem.objects.create(task=task, text=text)
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({
@@ -667,6 +673,76 @@ def task_toggle(request, pk):
     return JsonResponse({
         'success': True,
         'is_completed': task.is_completed,
+    })
+
+
+def _save_task_from_post(task, user, post):
+    """Общая логика сохранения полей задачи из POST."""
+    task.title = (post.get('title') or task.title).strip()
+    task.description = post.get('description', task.description)
+
+    project_id = post.get('project')
+    task.project_id = project_id if project_id else None
+
+    task.priority = int(post.get('priority', task.priority))
+
+    due_date_raw = post.get('due_date')
+    parsed_date = datetime.strptime(due_date_raw, '%Y-%m-%d').date() if due_date_raw else None
+    if parsed_date != task.due_date:
+        task.due_date = parsed_date
+        if parsed_date:
+            max_o = Task.objects.filter(
+                user=user, due_date=parsed_date
+            ).exclude(pk=task.pk).aggregate(m=Max('order'))['m']
+            task.order = (max_o if max_o is not None else -1) + 1
+        else:
+            task.order = 0
+
+    due_time = post.get('due_time')
+    task.due_time = due_time if due_time else None
+
+    tag_ids = post.getlist('tags')
+    if tag_ids or 'tags' in post:
+        task.tags.set(tag_ids)
+
+    task.save()
+    return task
+
+
+@login_required
+@require_GET
+def api_task_editor(request, pk):
+    """HTML-панель редактора задачи для модального окна (календарь и др.)."""
+    task = get_object_or_404(
+        Task.objects.prefetch_related('checklist_items', 'tags', 'project'),
+        pk=pk,
+        user=request.user,
+    )
+    html = render_to_string(
+        'scope/includes/task_editor_panel.html',
+        {
+            'task': task,
+            'projects': Project.objects.filter(user=request.user, is_archived=False),
+            'tags': Tag.objects.filter(user=request.user),
+        },
+        request=request,
+    )
+    return JsonResponse({'success': True, 'html': html, 'id': task.id, 'title': task.title})
+
+
+@login_required
+@require_POST
+def api_task_editor_save(request, pk):
+    """Сохранение задачи из модального редактора."""
+    task = get_object_or_404(Task, pk=pk, user=request.user)
+    _save_task_from_post(task, request.user, request.POST)
+    progress = task.checklist_progress
+    return JsonResponse({
+        'success': True,
+        'id': task.id,
+        'title': task.title,
+        'is_completed': task.is_completed,
+        'checklist_progress': progress,
     })
 
 

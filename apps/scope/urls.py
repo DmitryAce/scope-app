@@ -37,6 +37,8 @@ urlpatterns = [
     path('tasks/<int:pk>/delete/', views.task_delete, name='task_delete'),
     path('tasks/<int:pk>/toggle/', views.task_toggle, name='task_toggle'),
     path('tasks/<int:pk>/update-inline/', views.task_update_inline, name='task_update_inline'),
+    path('api/tasks/<int:pk>/editor/', views.api_task_editor, name='api_task_editor'),
+    path('api/tasks/<int:pk>/editor/save/', views.api_task_editor_save, name='api_task_editor_save'),
     
     # Чек-листы (AJAX)
     path('tasks/<int:task_pk>/checklist/add/', views.checklist_add, name='checklist_add'),
