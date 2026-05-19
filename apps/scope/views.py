@@ -593,11 +593,17 @@ def task_create(request):
 @login_required
 def task_detail(request, pk):
     """Детальная страница задачи"""
-    task = get_object_or_404(Task, pk=pk, user=request.user)
-    
+    task = get_object_or_404(
+        Task.objects.prefetch_related(
+            'tags', 'checklist_items', 'links', 'attachments',
+        ).select_related('project'),
+        pk=pk,
+        user=request.user,
+    )
+
     context = {
         'task': task,
-        'page_title': task.title,
+        'page_title': 'Задача',
         'current_page': 'dashboard',
         **get_sidebar_context(request.user),
     }
@@ -755,23 +761,28 @@ def task_update_inline(request, pk):
     # Обновляем только переданные поля
     title = request.POST.get('title')
     priority = request.POST.get('priority')
-    
+    description = request.POST.get('description')
+
     if title is not None and title.strip():
         task.title = title.strip()
-    
+
     if priority is not None:
         try:
             task.priority = int(priority)
         except ValueError:
             pass
-    
+
+    if description is not None:
+        task.description = description.strip()
+
     task.save()
-    
+
     return JsonResponse({
         'success': True,
         'title': task.title,
         'priority': task.priority,
         'priority_display': task.get_priority_display(),
+        'description': task.description,
     })
 
 

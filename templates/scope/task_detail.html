@@ -1,494 +1,331 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="task-detail animate-fade-in">
-    <div class="task-detail-header">
-        <div class="task-checkbox task-detail-checkbox">
-            <input type="checkbox" id="task-main-{{ task.id }}" {% if task.is_completed %}checked{% endif %} onchange="toggleTask({{ task.id }})">
-            <label for="task-main-{{ task.id }}"></label>
-        </div>
-        <input type="text" 
-               class="task-detail-title-input {% if task.is_completed %}completed{% endif %}" 
-               id="taskTitleInput"
-               value="{{ task.title }}"
-               data-task-id="{{ task.id }}"
-               onkeydown="if(event.key === 'Enter') { this.blur(); }"
-               onblur="saveTaskTitle({{ task.id }})">
-        <div class="task-detail-actions">
-            <a href="{% url 'scope:task_edit' task.id %}" class="btn btn-ghost">
+<div class="task-detail-page task-detail-page--priority-{{ task.priority }} animate-fade-in">
+    <nav class="task-detail-topbar">
+        <a href="{% url 'scope:dashboard' %}" class="task-detail-back">
+            <i class="ri-arrow-left-line"></i>
+            Все задачи
+        </a>
+        <div class="task-detail-topbar-actions">
+            <a href="{% url 'scope:task_edit' task.id %}" class="btn btn-ghost btn-sm">
                 <i class="ri-edit-line"></i>
-                Ещё
+                Редактировать
             </a>
-            <button class="btn btn-ghost" onclick="deleteTask({{ task.id }})" style="color: var(--priority-urgent);">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="deleteTask({{ task.id }})" style="color: var(--priority-urgent);">
                 <i class="ri-delete-bin-line"></i>
+                Удалить
             </button>
         </div>
-    </div>
-    
-    <div class="task-detail-body">
-        <!-- Info Section -->
-        <div class="task-detail-section">
-            <div class="task-detail-info">
-                <div class="info-item info-item-priority">
-                    <span class="info-label">Приоритет</span>
-                    <div class="priority-selector" id="prioritySelector" data-current="{{ task.priority }}">
-                        <button type="button" class="priority-option {% if task.priority == 1 %}active{% endif %}" data-priority="1" onclick="setPriority({{ task.id }}, 1)" title="Низкий">
-                            <span class="priority-dot priority-low"></span>
-                        </button>
-                        <button type="button" class="priority-option {% if task.priority == 2 %}active{% endif %}" data-priority="2" onclick="setPriority({{ task.id }}, 2)" title="Средний">
-                            <span class="priority-dot priority-medium"></span>
-                        </button>
-                        <button type="button" class="priority-option {% if task.priority == 3 %}active{% endif %}" data-priority="3" onclick="setPriority({{ task.id }}, 3)" title="Высокий">
-                            <span class="priority-dot priority-high"></span>
-                        </button>
-                        <button type="button" class="priority-option {% if task.priority == 4 %}active{% endif %}" data-priority="4" onclick="setPriority({{ task.id }}, 4)" title="Срочный">
-                            <span class="priority-dot priority-urgent"></span>
-                        </button>
-                    </div>
-                </div>
-                
-                {% if task.project %}
-                <div class="info-item">
-                    <span class="info-label">Проект</span>
-                    <span class="info-value">
-                        <span style="color: {{ task.project.color }}">{{ task.project.name }}</span>
-                    </span>
-                </div>
-                {% endif %}
-                
-                {% if task.due_date %}
-                <div class="info-item">
-                    <span class="info-label">Срок</span>
-                    <span class="info-value {% if task.is_overdue %}overdue{% endif %}">
-                        {{ task.due_date|date:"d F Y" }}
-                        {% if task.due_time %}в {{ task.due_time|time:"H:i" }}{% endif %}
-                    </span>
-                </div>
-                {% endif %}
-                
-                <div class="info-item">
-                    <span class="info-label">Создано</span>
-                    <span class="info-value">{{ task.created_at|date:"d F Y, H:i" }}</span>
-                </div>
-                
-                {% if task.is_completed %}
-                <div class="info-item">
-                    <span class="info-label">Завершено</span>
-                    <span class="info-value" style="color: var(--priority-low)">{{ task.completed_at|date:"d F Y, H:i" }}</span>
-                </div>
-                {% endif %}
+    </nav>
+
+    <header class="task-detail-hero">
+        <div class="task-detail-hero-main">
+            <div class="task-checkbox task-detail-checkbox">
+                <input type="checkbox" id="task-main-{{ task.id }}" {% if task.is_completed %}checked{% endif %} onchange="toggleTask({{ task.id }})">
+                <label for="task-main-{{ task.id }}"></label>
             </div>
+            <input type="text"
+                   class="task-detail-title-input {% if task.is_completed %}completed{% endif %}"
+                   id="taskTitleInput"
+                   value="{{ task.title }}"
+                   data-task-id="{{ task.id }}"
+                   aria-label="Название задачи"
+                   onkeydown="if(event.key === 'Enter') { this.blur(); }"
+                   onblur="saveTaskTitle({{ task.id }})">
         </div>
-        
-        {% if task.description %}
-        <!-- Description Section -->
-        <div class="task-detail-section">
-            <h3 class="task-detail-section-title">
-                <i class="ri-file-text-line"></i>
-                Описание
-            </h3>
-            <p class="task-detail-description">{{ task.description }}</p>
+        <div class="task-detail-badges">
+            {% if task.is_completed %}
+            <span class="task-detail-badge task-detail-badge--done">
+                <i class="ri-checkbox-circle-fill"></i> Завершена
+            </span>
+            {% elif task.is_overdue %}
+            <span class="task-detail-badge task-detail-badge--overdue">
+                <i class="ri-alarm-warning-line"></i> Просрочена
+            </span>
+            {% else %}
+            <span class="task-detail-badge">
+                <i class="ri-play-circle-line"></i> В работе
+            </span>
+            {% endif %}
+            <span class="task-detail-badge task-detail-badge--priority">
+                <span class="priority-dot priority-{% if task.priority == 1 %}low{% elif task.priority == 2 %}medium{% elif task.priority == 3 %}high{% else %}urgent{% endif %}"></span>
+                {{ task.get_priority_display }}
+            </span>
+            {% if task.project %}
+            <span class="task-detail-badge">
+                <span class="task-detail-project-dot" style="background: {{ task.project.color }}"></span>
+                {{ task.project.name }}
+            </span>
+            {% endif %}
+            {% if task.due_date %}
+            <span class="task-detail-badge">
+                <i class="ri-calendar-line"></i>
+                {{ task.due_date|date:"d E" }}{% if task.due_time %}, {{ task.due_time|time:"H:i" }}{% endif %}
+            </span>
+            {% endif %}
         </div>
-        {% endif %}
-        
-        {% if task.tags.exists %}
-        <!-- Tags Section -->
-        <div class="task-detail-section">
-            <h3 class="task-detail-section-title">
-                <i class="ri-price-tag-3-line"></i>
-                Теги
-            </h3>
-            <div class="task-tags">
-                {% for tag in task.tags.all %}
-                <span class="task-tag" style="background: {{ tag.color }}20; color: {{ tag.color }}; padding: 4px 12px; font-size: 13px;">
-                    {{ tag.name }}
-                </span>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- Checklist Section -->
-        <div class="task-detail-section">
-            <h3 class="task-detail-section-title">
-                <i class="ri-checkbox-multiple-line"></i>
-                Чек-лист
-                {% if task.checklist_progress %}
-                <span class="task-checklist-progress" style="margin-left: auto; font-weight: normal;">
-                    <div class="progress-bar" style="width: 100px;">
-                        <div class="progress-bar-fill" style="width: {{ task.checklist_progress.percent }}%"></div>
-                    </div>
-                    <span class="checklist-progress-text">{{ task.checklist_progress.completed }}/{{ task.checklist_progress.total }}</span>
-                </span>
-                {% endif %}
-            </h3>
-            
-            <div class="checklist">
-                {% for item in task.checklist_items.all %}
-                <div class="checklist-item {% if item.is_completed %}completed{% endif %}" data-id="{{ item.id }}">
-                    <div class="task-checkbox">
-                        <input type="checkbox" id="check-{{ item.id }}" {% if item.is_completed %}checked{% endif %} onchange="toggleChecklistItem({{ item.id }})">
-                        <label for="check-{{ item.id }}"></label>
-                    </div>
-                    <span class="checklist-text">{{ item.text }}</span>
-                    <button class="btn-icon checklist-delete" onclick="deleteChecklistItem({{ item.id }})">
-                        <i class="ri-close-line"></i>
-                    </button>
+    </header>
+
+    <div class="task-detail-layout">
+        <main class="task-detail-main">
+            <section class="task-detail-card task-detail-desc-card" id="taskDescriptionCard">
+                <button type="button"
+                        class="btn-icon task-detail-desc-edit-btn"
+                        id="taskDescEditBtn"
+                        onclick="startEditTaskDescription({{ task.id }})"
+                        title="Редактировать описание"
+                        aria-label="Редактировать описание">
+                    <i class="ri-pencil-line"></i>
+                </button>
+                <textarea id="taskDescriptionInitial" hidden aria-hidden="true">{{ task.description }}</textarea>
+                <div class="task-detail-card-head">
+                    <h2 class="task-detail-card-title">
+                        <i class="ri-file-text-line"></i>
+                        Описание
+                    </h2>
                 </div>
-                {% endfor %}
-                
-                <div class="checklist-add">
-                    <input type="text" 
-                           id="checklistInput" 
-                           class="form-input" 
-                           placeholder="Добавить пункт..."
-                           onkeypress="if(event.key === 'Enter') addChecklistItem({{ task.id }})">
-                    <button class="btn btn-ghost" onclick="addChecklistItem({{ task.id }})">
+                <div id="taskDescriptionView">
+                    {% if task.description %}
+                    <p class="task-detail-description" id="taskDescriptionText">{{ task.description }}</p>
+                    {% else %}
+                    <p class="task-detail-description-empty" id="taskDescriptionText">
+                        Описание пока пустое — нажмите <i class="ri-pencil-line"></i>, чтобы добавить.
+                    </p>
+                    {% endif %}
+                </div>
+                <div id="taskDescriptionEdit" class="task-detail-desc-edit" hidden>
+                    <textarea id="taskDescriptionInput"
+                              class="form-input task-detail-desc-input"
+                              rows="6"
+                              placeholder="Описание задачи..."
+                              aria-label="Описание задачи"></textarea>
+                    <div class="task-detail-desc-edit-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="cancelEditTaskDescription()">Отмена</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="taskDescSaveBtn" onclick="saveTaskDescription({{ task.id }})">Сохранить</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="task-detail-card">
+                <div class="task-detail-card-head">
+                    <h2 class="task-detail-card-title">
+                        <i class="ri-checkbox-multiple-line"></i>
+                        Чек-лист
+                    </h2>
+                    {% if task.checklist_progress %}
+                    <div class="task-detail-checklist-progress">
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: {{ task.checklist_progress.percent }}%"></div>
+                        </div>
+                        <span>{{ task.checklist_progress.completed }} из {{ task.checklist_progress.total }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="checklist">
+                    {% for item in task.checklist_items.all %}
+                    <div class="checklist-item {% if item.is_completed %}completed{% endif %}" data-id="{{ item.id }}">
+                        <div class="task-checkbox">
+                            <input type="checkbox" id="check-{{ item.id }}" {% if item.is_completed %}checked{% endif %} onchange="toggleChecklistItem({{ item.id }})">
+                            <label for="check-{{ item.id }}"></label>
+                        </div>
+                        <span class="checklist-text">{{ item.text }}</span>
+                        <button type="button" class="btn-icon checklist-delete" onclick="deleteChecklistItem({{ item.id }})" title="Удалить">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    {% empty %}
+                    <p class="task-detail-description-empty" style="margin-bottom: 12px;">Пунктов пока нет — добавьте первый ниже.</p>
+                    {% endfor %}
+
+                    <div class="checklist-add">
+                        <input type="text"
+                               id="checklistInput"
+                               class="form-input"
+                               placeholder="Новый пункт чек-листа..."
+                               onkeypress="if(event.key === 'Enter') addChecklistItem({{ task.id }})">
+                        <button type="button" class="btn btn-ghost" onclick="addChecklistItem({{ task.id }})" title="Добавить">
+                            <i class="ri-add-line"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="task-detail-card">
+                <div class="task-detail-card-head">
+                    <h2 class="task-detail-card-title">
+                        <i class="ri-link"></i>
+                        Ссылки
+                    </h2>
+                    <span class="task-detail-card-count" id="linksCount">{{ task.links.count }}</span>
+                </div>
+
+                <div class="task-detail-links-list links-list" id="linksList">
+                    {% for link in task.links.all %}
+                    <div class="link-item" data-id="{{ link.id }}">
+                        <img src="{{ link.favicon_url }}" alt="" class="link-favicon">
+                        <a href="{{ link.url }}" target="_blank" rel="noopener" class="link-content">
+                            <span class="link-title">{{ link.display_title }}</span>
+                            <span class="link-url">{{ link.url|truncatechars:60 }}</span>
+                        </a>
+                        <button type="button" class="btn-icon link-delete" onclick="deleteLink({{ link.id }})" title="Удалить">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="task-detail-link-add link-add">
+                    <div class="task-detail-link-fields link-add-fields">
+                        <input type="url" id="linkUrlInput" class="form-input" placeholder="https://...">
+                        <input type="text" id="linkTitleInput" class="form-input" placeholder="Название (необязательно)">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addLink({{ task.id }})">
                         <i class="ri-add-line"></i>
                     </button>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Links Section -->
-        <div class="task-detail-section">
-            <h3 class="task-detail-section-title">
-                <i class="ri-link"></i>
-                Ссылки
-            </h3>
-            
-            <div class="links-list" id="linksList">
-                {% for link in task.links.all %}
-                <div class="link-item" data-id="{{ link.id }}">
-                    <img src="{{ link.favicon_url }}" alt="" class="link-favicon">
-                    <a href="{{ link.url }}" target="_blank" rel="noopener" class="link-content">
-                        <span class="link-title">{{ link.display_title }}</span>
-                        <span class="link-url">{{ link.url|truncatechars:50 }}</span>
-                    </a>
-                    <button class="btn-icon link-delete" onclick="deleteLink({{ link.id }})">
-                        <i class="ri-close-line"></i>
+            </section>
+
+            <section class="task-detail-card">
+                <div class="task-detail-card-head">
+                    <h2 class="task-detail-card-title">
+                        <i class="ri-attachment-2"></i>
+                        Вложения
+                    </h2>
+                    <span class="task-detail-card-count" id="attachmentsCount">{{ task.attachments.count }}</span>
+                </div>
+
+                <div class="task-detail-attachments-list attachments-list" id="attachmentsList">
+                    {% for att in task.attachments.all %}
+                    <div class="attachment-item" data-id="{{ att.id }}">
+                        <i class="{{ att.file_icon }} attachment-icon"></i>
+                        <a href="{{ att.file.url }}" target="_blank" class="attachment-content">
+                            <span class="attachment-name">{{ att.filename }}</span>
+                            <span class="attachment-size">{{ att.file_size_display }}</span>
+                        </a>
+                        <button type="button" class="btn-icon attachment-delete" onclick="deleteAttachment({{ att.id }})" title="Удалить">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="task-detail-attachment-add attachment-add">
+                    <label class="attachment-drop-zone" id="dropZone">
+                        <input type="file" id="attachmentInput" onchange="uploadAttachment({{ task.id }})" hidden>
+                        <i class="ri-upload-cloud-line"></i>
+                        <span>Перетащите файл сюда или нажмите для выбора</span>
+                        <span class="attachment-hint">До 1 ГБ на файл</span>
+                    </label>
+                </div>
+            </section>
+        </main>
+
+        <aside class="task-detail-aside">
+            <div class="task-detail-meta-card">
+                <span class="task-detail-meta-label">Приоритет</span>
+                <div class="task-detail-priority-selector" id="prioritySelector" data-current="{{ task.priority }}">
+                    <button type="button" class="task-detail-priority-option {% if task.priority == 1 %}active{% endif %}" data-priority="1" onclick="setPriority({{ task.id }}, 1)">
+                        <span class="priority-dot priority-low"></span> Низкий
+                    </button>
+                    <button type="button" class="task-detail-priority-option {% if task.priority == 2 %}active{% endif %}" data-priority="2" onclick="setPriority({{ task.id }}, 2)">
+                        <span class="priority-dot priority-medium"></span> Средний
+                    </button>
+                    <button type="button" class="task-detail-priority-option {% if task.priority == 3 %}active{% endif %}" data-priority="3" onclick="setPriority({{ task.id }}, 3)">
+                        <span class="priority-dot priority-high"></span> Высокий
+                    </button>
+                    <button type="button" class="task-detail-priority-option {% if task.priority == 4 %}active{% endif %}" data-priority="4" onclick="setPriority({{ task.id }}, 4)">
+                        <span class="priority-dot priority-urgent"></span> Срочный
                     </button>
                 </div>
-                {% endfor %}
             </div>
-            
-            <div class="link-add">
-                <div class="link-add-fields">
-                    <input type="url" 
-                           id="linkUrlInput" 
-                           class="form-input" 
-                           placeholder="https://example.com">
-                    <input type="text" 
-                           id="linkTitleInput" 
-                           class="form-input link-title-input" 
-                           placeholder="Название (опционально)">
+
+            <div class="task-detail-meta-card">
+                <span class="task-detail-meta-label">Срок</span>
+                {% if task.due_date %}
+                <p class="task-detail-meta-value {% if task.is_overdue and not task.is_completed %}task-detail-meta-value--overdue{% endif %}">
+                    {{ task.due_date|date:"l, d F Y" }}
+                    {% if task.due_time %}<br><span class="task-detail-meta-value--muted">{{ task.due_time|time:"H:i" }}</span>{% endif %}
+                </p>
+                {% else %}
+                <p class="task-detail-meta-value task-detail-meta-value--muted">Без срока</p>
+                <a href="{% url 'scope:task_edit' task.id %}" class="btn btn-ghost btn-sm" style="margin-top: 10px;">Указать дату</a>
+                {% endif %}
+            </div>
+
+            <div class="task-detail-meta-card">
+                <span class="task-detail-meta-label">Проект</span>
+                {% if task.project %}
+                <a href="{% url 'scope:project_detail' task.project.id %}" class="task-detail-project-link task-detail-meta-value">
+                    <span class="task-detail-project-dot" style="background: {{ task.project.color }}"></span>
+                    {{ task.project.name }}
+                </a>
+                {% else %}
+                <p class="task-detail-meta-value task-detail-meta-value--muted">Без проекта</p>
+                {% endif %}
+            </div>
+
+            {% if task.tags.exists %}
+            <div class="task-detail-meta-card">
+                <span class="task-detail-meta-label">Теги</span>
+                <div class="task-detail-tags">
+                    {% for tag in task.tags.all %}
+                    <span class="task-detail-tag" style="background: {{ tag.color }}22; color: {{ tag.color }};">
+                        {{ tag.name }}
+                    </span>
+                    {% endfor %}
                 </div>
-                <button class="btn btn-ghost" onclick="addLink({{ task.id }})">
-                    <i class="ri-add-line"></i>
-                </button>
             </div>
-        </div>
-        
-        <!-- Attachments Section -->
-        <div class="task-detail-section">
-            <h3 class="task-detail-section-title">
-                <i class="ri-attachment-2"></i>
-                Вложения
-            </h3>
-            
-            <div class="attachments-list" id="attachmentsList">
-                {% for att in task.attachments.all %}
-                <div class="attachment-item" data-id="{{ att.id }}">
-                    <i class="{{ att.file_icon }} attachment-icon"></i>
-                    <a href="{{ att.file.url }}" target="_blank" class="attachment-content">
-                        <span class="attachment-name">{{ att.filename }}</span>
-                        <span class="attachment-size">{{ att.file_size_display }}</span>
-                    </a>
-                    <button class="btn-icon attachment-delete" onclick="deleteAttachment({{ att.id }})">
-                        <i class="ri-close-line"></i>
-                    </button>
+            {% endif %}
+
+            <div class="task-detail-meta-card">
+                <span class="task-detail-meta-label">История</span>
+                <div class="task-detail-timeline">
+                    <div class="task-detail-timeline-item">
+                        <i class="ri-add-circle-line"></i>
+                        <div>
+                            <strong>Создана</strong>
+                            <span>{{ task.created_at|date:"d F Y, H:i" }}</span>
+                        </div>
+                    </div>
+                    {% if task.updated_at != task.created_at %}
+                    <div class="task-detail-timeline-item">
+                        <i class="ri-edit-line"></i>
+                        <div>
+                            <strong>Обновлена</strong>
+                            <span>{{ task.updated_at|date:"d F Y, H:i" }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if task.is_completed and task.completed_at %}
+                    <div class="task-detail-timeline-item">
+                        <i class="ri-checkbox-circle-fill"></i>
+                        <div>
+                            <strong>Завершена</strong>
+                            <span>{{ task.completed_at|date:"d F Y, H:i" }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
-                {% endfor %}
             </div>
-            
-            <div class="attachment-add">
-                <label class="attachment-drop-zone" id="dropZone">
-                    <input type="file" id="attachmentInput" onchange="uploadAttachment({{ task.id }})" hidden>
-                    <i class="ri-upload-cloud-line"></i>
-                    <span>Перетащите файл или нажмите для выбора</span>
-                    <span class="attachment-hint">Макс. 1 ГБ</span>
-                </label>
-            </div>
-        </div>
+        </aside>
     </div>
 </div>
 
-<style>
-/* Inline Title Edit */
-.task-detail-title-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--text-primary);
-    padding: 4px 8px;
-    margin: -4px -8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    transition: all var(--transition-fast);
-}
-
-.task-detail-title-input:hover {
-    background: var(--bg-tertiary);
-}
-
-.task-detail-title-input:focus {
-    background: var(--bg-tertiary);
-    box-shadow: 0 0 0 2px var(--accent-primary);
-}
-
-.task-detail-title-input.completed {
-    text-decoration: line-through;
-    color: var(--text-muted);
-}
-
-.task-detail-title-input.saving {
-    opacity: 0.6;
-}
-
-/* Priority Selector */
-.priority-selector {
-    display: flex;
-    gap: 4px;
-    background: var(--bg-tertiary);
-    padding: 4px;
-    border-radius: var(--radius-sm);
-}
-
-.priority-option {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    background: transparent;
-    border: none;
-}
-
-.priority-option:hover {
-    background: var(--bg-elevated);
-}
-
-.priority-option.active {
-    background: var(--bg-elevated);
-    box-shadow: 0 0 0 2px var(--accent-primary);
-}
-
-.priority-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-}
-
-.info-value.overdue {
-    color: var(--priority-urgent);
-}
-
-/* Links Styles */
-.links-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
-.link-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
-}
-
-.link-item:hover {
-    background: var(--bg-elevated);
-}
-
-.link-favicon {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-    flex-shrink: 0;
-}
-
-.link-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    text-decoration: none;
-}
-
-.link-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.link-url {
-    font-size: 12px;
-    color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.link-delete {
-    opacity: 0;
-    transition: opacity var(--transition-fast);
-}
-
-.link-item:hover .link-delete {
-    opacity: 1;
-}
-
-.link-add {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-}
-
-.link-add-fields {
-    flex: 1;
-    display: flex;
-    gap: 8px;
-}
-
-.link-add-fields .form-input {
-    flex: 1;
-}
-
-.link-title-input {
-    max-width: 200px;
-}
-
-/* Attachments Styles */
-.attachments-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
-.attachment-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
-}
-
-.attachment-item:hover {
-    background: var(--bg-elevated);
-}
-
-.attachment-icon {
-    font-size: 20px;
-    color: var(--accent-secondary);
-    flex-shrink: 0;
-}
-
-.attachment-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    text-decoration: none;
-}
-
-.attachment-name {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.attachment-size {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.attachment-delete {
-    opacity: 0;
-    transition: opacity var(--transition-fast);
-}
-
-.attachment-item:hover .attachment-delete {
-    opacity: 1;
-}
-
-.attachment-drop-zone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 24px;
-    border: 2px dashed var(--border-color);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    color: var(--text-muted);
-}
-
-.attachment-drop-zone:hover,
-.attachment-drop-zone.drag-over {
-    border-color: var(--accent-primary);
-    background: rgba(124, 58, 237, 0.05);
-    color: var(--text-secondary);
-}
-
-.attachment-drop-zone i {
-    font-size: 32px;
-}
-
-.attachment-hint {
-    font-size: 12px;
-    opacity: 0.7;
-}
-
-/* Uploading state */
-.attachment-drop-zone.uploading {
-    pointer-events: none;
-    opacity: 0.6;
-}
-
-.attachment-drop-zone.uploading::after {
-    content: 'Загрузка...';
-    position: absolute;
-}
-</style>
-
 <script>
-// Links
+function updateDetailCount(elId, delta) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const n = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+    el.textContent = String(n);
+}
+
 async function addLink(taskId) {
     const urlInput = document.getElementById('linkUrlInput');
     const titleInput = document.getElementById('linkTitleInput');
     const url = urlInput.value.trim();
     const title = titleInput.value.trim();
-
     if (!url) { urlInput.focus(); return; }
 
     try {
@@ -505,9 +342,9 @@ async function addLink(taskId) {
                 <img src="${data.favicon}" alt="" class="link-favicon">
                 <a href="${data.url}" target="_blank" rel="noopener" class="link-content">
                     <span class="link-title">${escapeHtml(data.title)}</span>
-                    <span class="link-url">${escapeHtml(data.url.substring(0, 50))}${data.url.length > 50 ? '...' : ''}</span>
+                    <span class="link-url">${escapeHtml(data.url.substring(0, 60))}${data.url.length > 60 ? '...' : ''}</span>
                 </a>
-                <button class="btn-icon link-delete" onclick="deleteLink(${data.id})">
+                <button type="button" class="btn-icon link-delete" onclick="deleteLink(${data.id})">
                     <i class="ri-close-line"></i>
                 </button>
             `;
@@ -515,11 +352,12 @@ async function addLink(taskId) {
             list.appendChild(item);
             urlInput.value = '';
             titleInput.value = '';
+            updateDetailCount('linksCount', 1);
             showToast('Ссылка добавлена');
         } else {
             showToast(data.error || 'Ошибка', 'error');
         }
-    } catch (err) { showToast('Ошибка', 'error'); }
+    } catch { showToast('Ошибка', 'error'); }
 }
 
 async function deleteLink(linkId) {
@@ -530,11 +368,14 @@ async function deleteLink(linkId) {
             if (item) {
                 item.style.transition = 'all 0.2s ease';
                 item.style.opacity = '0';
-                item.style.transform = 'translateX(-20px)';
-                setTimeout(() => item.remove(), 200);
+                item.style.transform = 'translateX(-12px)';
+                setTimeout(() => {
+                    item.remove();
+                    updateDetailCount('linksCount', -1);
+                }, 200);
             }
         }
-    } catch (err) { showToast('Ошибка', 'error'); }
+    } catch { showToast('Ошибка', 'error'); }
 }
 
 document.getElementById('linkUrlInput')?.addEventListener('keypress', function(e) {
@@ -544,7 +385,6 @@ document.getElementById('linkTitleInput')?.addEventListener('keypress', function
     if (e.key === 'Enter') { e.preventDefault(); addLink({{ task.id }}); }
 });
 
-// Attachments
 async function uploadAttachment(taskId) {
     const input = document.getElementById('attachmentInput');
     const dropZone = document.getElementById('dropZone');
@@ -576,18 +416,19 @@ async function uploadAttachment(taskId) {
                     <span class="attachment-name">${escapeHtml(data.filename)}</span>
                     <span class="attachment-size">${data.file_size}</span>
                 </a>
-                <button class="btn-icon attachment-delete" onclick="deleteAttachment(${data.id})">
+                <button type="button" class="btn-icon attachment-delete" onclick="deleteAttachment(${data.id})">
                     <i class="ri-close-line"></i>
                 </button>
             `;
             item.style.animation = 'slideIn 0.3s ease';
             list.appendChild(item);
             input.value = '';
+            updateDetailCount('attachmentsCount', 1);
             showToast('Файл загружен');
         } else {
             showToast(data.error || 'Ошибка', 'error');
         }
-    } catch (err) {
+    } catch {
         dropZone.classList.remove('uploading');
         showToast('Ошибка загрузки', 'error');
     }
@@ -601,16 +442,17 @@ async function deleteAttachment(attId) {
             if (item) {
                 item.style.transition = 'all 0.2s ease';
                 item.style.opacity = '0';
-                setTimeout(() => item.remove(), 200);
+                setTimeout(() => {
+                    item.remove();
+                    updateDetailCount('attachmentsCount', -1);
+                }, 200);
             }
         }
-    } catch (err) { showToast('Ошибка', 'error'); }
+    } catch { showToast('Ошибка', 'error'); }
 }
 
-// Drag and Drop for attachments
 const dropZone = document.getElementById('dropZone');
 const attachmentInput = document.getElementById('attachmentInput');
-
 if (dropZone) {
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
         dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
@@ -629,7 +471,92 @@ if (dropZone) {
     }, false);
 }
 
-// Inline Title Edit
+let _taskDescriptionSnapshot = '';
+
+function startEditTaskDescription(taskId) {
+    const card = document.getElementById('taskDescriptionCard');
+    const view = document.getElementById('taskDescriptionView');
+    const edit = document.getElementById('taskDescriptionEdit');
+    const input = document.getElementById('taskDescriptionInput');
+    const btn = document.getElementById('taskDescEditBtn');
+    if (!card || !view || !edit || !input) return;
+
+    const initial = document.getElementById('taskDescriptionInitial');
+    _taskDescriptionSnapshot = initial ? initial.value : '';
+    input.value = _taskDescriptionSnapshot;
+    view.hidden = true;
+    edit.hidden = false;
+    if (btn) btn.hidden = true;
+    card.classList.add('is-editing-desc');
+    input.focus();
+}
+
+function cancelEditTaskDescription() {
+    const card = document.getElementById('taskDescriptionCard');
+    const view = document.getElementById('taskDescriptionView');
+    const edit = document.getElementById('taskDescriptionEdit');
+    const btn = document.getElementById('taskDescEditBtn');
+    if (!view || !edit) return;
+
+    view.hidden = false;
+    edit.hidden = true;
+    if (btn) btn.hidden = false;
+    card?.classList.remove('is-editing-desc');
+}
+
+function renderTaskDescriptionView(text) {
+    const view = document.getElementById('taskDescriptionView');
+    const initial = document.getElementById('taskDescriptionInitial');
+    if (!view) return;
+
+    const trimmed = (text || '').trim();
+    if (initial) initial.value = trimmed;
+
+    if (trimmed) {
+        view.innerHTML = `<p class="task-detail-description" id="taskDescriptionText"></p>`;
+        const p = document.getElementById('taskDescriptionText');
+        if (p) p.textContent = trimmed;
+    } else {
+        view.innerHTML = `<p class="task-detail-description-empty" id="taskDescriptionText">Описание пока пустое — нажмите <i class="ri-pencil-line"></i>, чтобы добавить.</p>`;
+    }
+}
+
+async function saveTaskDescription(taskId) {
+    const input = document.getElementById('taskDescriptionInput');
+    const saveBtn = document.getElementById('taskDescSaveBtn');
+    if (!input) return;
+
+    const newText = input.value;
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+        const data = await apiFetch(`/tasks/${taskId}/update-inline/`, {
+            method: 'POST',
+            body: `description=${encodeURIComponent(newText)}`,
+        });
+        if (data.success) {
+            renderTaskDescriptionView(data.description ?? newText);
+            cancelEditTaskDescription();
+            showToast('Описание сохранено');
+        }
+    } catch {
+        showToast('Ошибка сохранения', 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+document.getElementById('taskDescriptionInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEditTaskDescription();
+    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        saveTaskDescription({{ task.id }});
+    }
+});
+
 async function saveTaskTitle(taskId) {
     const input = document.getElementById('taskTitleInput');
     const newTitle = input.value.trim();
@@ -645,26 +572,30 @@ async function saveTaskTitle(taskId) {
         input.classList.remove('saving');
         if (data.success) {
             input.defaultValue = data.title;
-            input.style.boxShadow = '0 0 0 2px var(--priority-low)';
-            setTimeout(() => { input.style.boxShadow = ''; }, 600);
-            showToast('Сохранено');
+            const pageTitle = document.querySelector('.page-title');
+            if (pageTitle) pageTitle.textContent = 'Задача';
+            showToast('Название сохранено');
         }
-    } catch (err) {
+    } catch {
         input.classList.remove('saving');
         showToast('Ошибка сохранения', 'error');
     }
 }
 
-// Priority Change
 async function setPriority(taskId, priority) {
     const selector = document.getElementById('prioritySelector');
-    const prev = parseInt(selector.dataset.current);
+    const prev = parseInt(selector.dataset.current, 10);
     if (priority === prev) return;
 
-    selector.querySelectorAll('.priority-option').forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.priority) === priority);
+    selector.querySelectorAll('.task-detail-priority-option').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.priority, 10) === priority);
     });
     selector.dataset.current = priority;
+    document.querySelector('.task-detail-page')?.classList.remove(
+        'task-detail-page--priority-1', 'task-detail-page--priority-2',
+        'task-detail-page--priority-3', 'task-detail-page--priority-4',
+    );
+    document.querySelector('.task-detail-page')?.classList.add(`task-detail-page--priority-${priority}`);
 
     try {
         const data = await apiFetch(`/tasks/${taskId}/update-inline/`, {
@@ -674,12 +605,12 @@ async function setPriority(taskId, priority) {
         if (data.success) {
             showToast(`Приоритет: ${data.priority_display}`);
         } else {
-            selector.querySelectorAll('.priority-option').forEach(btn => {
-                btn.classList.toggle('active', parseInt(btn.dataset.priority) === prev);
+            selector.querySelectorAll('.task-detail-priority-option').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.priority, 10) === prev);
             });
             selector.dataset.current = prev;
         }
-    } catch (err) {
+    } catch {
         selector.dataset.current = prev;
     }
 }
