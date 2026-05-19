@@ -2550,6 +2550,22 @@ select.form-input:not([multiple]) {
     animation: selectDropIn 0.15s ease;
 }
 
+/* В модалке: список в body, поверх всех модалок */
+#taskProjectDropdown.custom-select-dropdown--floating {
+    position: fixed;
+    z-index: 10100;
+    pointer-events: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+#taskProjectDropdown.custom-select-dropdown--floating .custom-select-option {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
 @keyframes selectDropIn {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }

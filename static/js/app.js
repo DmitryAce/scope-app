@@ -224,9 +224,19 @@ function updateActiveNav(url) {
 
 // Intercept link clicks
 document.addEventListener('click', (e) => {
-    // Close custom selects on click outside
-    if (!e.target.closest('.custom-select-wrap')) {
-        document.querySelectorAll('.custom-select-dropdown.open').forEach(d => d.classList.remove('open'));
+    const projectOpt = e.target.closest('#taskProjectDropdown.open .custom-select-option');
+    if (projectOpt) {
+        pickProject(projectOpt);
+        return;
+    }
+    if (
+        e.target.closest('#taskProjectTrigger')
+        || e.target.closest('#taskProjectDropdown')
+        || e.target.closest('.custom-select-wrap')
+    ) {
+        /* открытие/скролл списка — не закрываем */
+    } else {
+        closeAllCustomSelectDropdowns();
     }
 
     // SPA link interception
@@ -252,17 +262,130 @@ window.addEventListener('popstate', () => {
 // CUSTOM PROJECT SELECTOR
 // ====================================
 
-function toggleProjectDropdown() {
+let _projectDropdownRepositionHandler = null;
+/** @type {{ wrap: HTMLElement, placeholder: Comment } | null} */
+let _projectDropdownMount = null;
+
+function getProjectSelectWrap() {
+    if (_projectDropdownMount?.wrap) return _projectDropdownMount.wrap;
+    return document.getElementById('taskProjectInput')?.closest('.custom-select-wrap') || null;
+}
+
+function mountProjectDropdownToBody(dd) {
+    const wrap = dd.closest('.custom-select-wrap');
+    if (!wrap || dd._mountedToBody) return;
+    const placeholder = document.createComment('taskProjectDropdown');
+    wrap.insertBefore(placeholder, dd);
+    document.body.appendChild(dd);
+    dd._mountedToBody = true;
+    _projectDropdownMount = { wrap, placeholder };
+}
+
+function unmountProjectDropdownFromBody(dd) {
+    if (!dd?._mountedToBody || !_projectDropdownMount) return;
+    const { wrap, placeholder } = _projectDropdownMount;
+    if (placeholder.parentNode) {
+        wrap.insertBefore(dd, placeholder);
+        placeholder.remove();
+    } else {
+        wrap.appendChild(dd);
+    }
+    dd._mountedToBody = false;
+    _projectDropdownMount = null;
+}
+
+function closeCustomSelectDropdown(dd) {
+    if (!dd) return;
+    if (dd.id === 'taskProjectDropdown') {
+        unmountProjectDropdownFromBody(dd);
+        unbindProjectDropdownReposition();
+    }
+    dd.classList.remove('open', 'custom-select-dropdown--floating');
+    dd.style.position = '';
+    dd.style.top = '';
+    dd.style.bottom = '';
+    dd.style.left = '';
+    dd.style.right = '';
+    dd.style.width = '';
+    dd.style.maxHeight = '';
+    dd.style.zIndex = '';
+}
+
+function closeAllCustomSelectDropdowns() {
+    document.querySelectorAll('.custom-select-dropdown.open').forEach(closeCustomSelectDropdown);
+}
+
+function positionProjectDropdown() {
     const dd = document.getElementById('taskProjectDropdown');
-    if (dd) dd.classList.toggle('open');
+    const trigger = document.getElementById('taskProjectTrigger');
+    if (!dd || !trigger || !dd.classList.contains('open')) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const gap = 4;
+    const preferredMax = 220;
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const spaceBelow = vh - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    const maxHeight = Math.min(preferredMax, openUp ? spaceAbove : spaceBelow);
+
+    dd.classList.add('custom-select-dropdown--floating');
+    dd.style.position = 'fixed';
+    dd.style.left = `${Math.max(8, Math.min(rect.left, vw - rect.width - 8))}px`;
+    dd.style.width = `${rect.width}px`;
+    dd.style.right = 'auto';
+    dd.style.maxHeight = `${Math.max(120, maxHeight)}px`;
+    dd.style.zIndex = '10100';
+
+    if (openUp) {
+        dd.style.top = 'auto';
+        dd.style.bottom = `${vh - rect.top + gap}px`;
+    } else {
+        dd.style.top = `${rect.bottom + gap}px`;
+        dd.style.bottom = 'auto';
+    }
+}
+
+function bindProjectDropdownReposition() {
+    unbindProjectDropdownReposition();
+    _projectDropdownRepositionHandler = () => positionProjectDropdown();
+    window.addEventListener('resize', _projectDropdownRepositionHandler);
+    window.addEventListener('scroll', _projectDropdownRepositionHandler, true);
+}
+
+function unbindProjectDropdownReposition() {
+    if (!_projectDropdownRepositionHandler) return;
+    window.removeEventListener('resize', _projectDropdownRepositionHandler);
+    window.removeEventListener('scroll', _projectDropdownRepositionHandler, true);
+    _projectDropdownRepositionHandler = null;
+}
+
+function toggleProjectDropdown(ev) {
+    if (ev?.stopPropagation) ev.stopPropagation();
+    const dd = document.getElementById('taskProjectDropdown');
+    if (!dd) return;
+
+    const willOpen = !dd.classList.contains('open');
+    closeAllCustomSelectDropdowns();
+
+    if (willOpen) {
+        mountProjectDropdownToBody(dd);
+        dd.classList.add('open');
+        positionProjectDropdown();
+        bindProjectDropdownReposition();
+    }
 }
 
 function pickProject(option) {
-    const wrap = option.closest('.custom-select-wrap');
+    const dd = document.getElementById('taskProjectDropdown');
+    const wrap = getProjectSelectWrap();
+    if (!wrap || !dd) return;
+
     const input = wrap.querySelector('input[type="hidden"]');
     const trigger = wrap.querySelector('.custom-select-trigger');
-    const valueSpan = trigger.querySelector('.custom-select-value');
-    const dd = wrap.querySelector('.custom-select-dropdown');
+    const valueSpan = trigger?.querySelector('.custom-select-value');
+    if (!input || !trigger || !valueSpan) return;
 
     input.value = option.dataset.value || '';
 
@@ -278,19 +401,20 @@ function pickProject(option) {
 
     dd.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
     option.classList.add('selected');
-    dd.classList.remove('open');
+    closeCustomSelectDropdown(dd);
 }
 
 function refreshModalProjectSelect(projects) {
     const dd = document.getElementById('taskProjectDropdown');
     if (!dd) return;
-    const wrap = dd.closest('.custom-select-wrap');
+    const wrap = getProjectSelectWrap();
+    if (!wrap) return;
     const input = wrap.querySelector('input[type="hidden"]');
     const curVal = input ? input.value : '';
 
-    let html = `<div class="custom-select-option ${!curVal ? 'selected' : ''}" data-value="" data-color="" onclick="pickProject(this)"><span>Без проекта</span></div>`;
+    let html = `<div class="custom-select-option ${!curVal ? 'selected' : ''}" data-value="" data-color=""><span>Без проекта</span></div>`;
     projects.forEach(p => {
-        html += `<div class="custom-select-option ${String(p.id) === String(curVal) ? 'selected' : ''}" data-value="${p.id}" data-color="${p.color}" onclick="pickProject(this)">
+        html += `<div class="custom-select-option ${String(p.id) === String(curVal) ? 'selected' : ''}" data-value="${p.id}" data-color="${p.color}">
             <span class="project-dot" style="background:${p.color}"></span>
             <span>${escapeHtml(p.name)}</span>
         </div>`;
@@ -333,6 +457,7 @@ function openTaskModal(defaults = {}) {
 }
 
 function closeTaskModal() {
+    closeAllCustomSelectDropdowns();
     const m = document.getElementById('taskModal');
     if (m) {
         m.classList.remove('active');
@@ -492,6 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.openTaskModal = openTaskModal;
 window.closeTaskModal = closeTaskModal;
+window.toggleProjectDropdown = toggleProjectDropdown;
+window.pickProject = pickProject;
 window.openProjectModal = openProjectModal;
 window.closeProjectModal = closeProjectModal;
 window.openTagModal = openTagModal;
