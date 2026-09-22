@@ -1135,10 +1135,17 @@ def task_update_date(request, pk):
     else:
         task.due_date = None
         task.order = 0
+
+    # Перенос по таймлайну задаёт ещё и время.
+    if 'due_time' in request.POST:
+        raw_time = (request.POST.get('due_time') or '').strip()
+        task.due_time = datetime.strptime(raw_time, '%H:%M').time() if raw_time else None
+
     task.save()
     return JsonResponse({
         'success': True,
         'due_date': task.due_date.isoformat() if task.due_date else None,
+        'due_time': task.due_time.strftime('%H:%M') if task.due_time else None,
         'order': task.order,
     })
 

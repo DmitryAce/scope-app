@@ -446,6 +446,7 @@ class KanbanCalendar {
         const hours = [];
         for (let h = startHour; h <= endHour; h++) hours.push(h);
         const gridHeight = (endHour - startHour) * HOUR_PX;
+        this._tl = { startHour, endHour, hourPx: HOUR_PX };
         const topOf = minutes => ((minutes - startHour * 60) / 60) * HOUR_PX;
 
         const hasAllDay = byDay.some(d => d.untimed.length > 0);
@@ -519,7 +520,10 @@ class KanbanCalendar {
                 }
             }
 
-            grid += `<div class="${cls}" style="height:${gridHeight}px">${cells}${blocks}${nowLine}</div>`;
+            grid += `<div class="${cls}" style="height:${gridHeight}px" data-date="${day.dateStr}"
+                          ondragover="kanbanCalendar.onTimelineDragOver(event)"
+                          ondragleave="kanbanCalendar.onTimelineDragLeave(event)"
+                          ondrop="kanbanCalendar.onTimelineDrop(event, '${day.dateStr}')">${cells}${blocks}${nowLine}</div>`;
         });
 
         return `
@@ -567,6 +571,9 @@ class KanbanCalendar {
         return `
             <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}"
                  style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${this.priorityColor(task)}"
+                 draggable="true"
+                 ondragstart="kanbanCalendar.onTimelineDragStart(event, ${task.id})"
+                 ondragend="kanbanCalendar.onTimelineDragEnd(event)"
                  data-task-id="${task.id}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
                  onclick="openTaskEditor(${task.id})">
@@ -579,6 +586,96 @@ class KanbanCalendar {
                     <i class="${task.completed ? 'ri-checkbox-circle-fill' : 'ri-checkbox-blank-circle-line'}"></i>
                 </button>
             </div>`;
+    }
+
+    // --- перенос блоков по времени
+
+    onTimelineDragStart(e, taskId) {
+        this.draggedTask = taskId;
+        const rect = e.currentTarget.getBoundingClientRect();
+        // Держим блок за ту же точку, за которую взяли.
+        this._grabOffsetMin = ((e.clientY - rect.top) / this._tl.hourPx) * 60;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(taskId));
+        e.currentTarget.classList.add('dragging');
+    }
+
+    onTimelineDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        this.clearTimelineGhost();
+    }
+
+    clearTimelineGhost() {
+        document.querySelectorAll('.tl-ghost').forEach(g => g.remove());
+        document.querySelectorAll('.tl-col.drag-over').forEach(c => c.classList.remove('drag-over'));
+    }
+
+    /** Минуты от полуночи по позиции курсора в колонке, с шагом 5 минут. */
+    timeFromPointer(e, col) {
+        const rect = col.getBoundingClientRect();
+        const raw = ((e.clientY - rect.top) / this._tl.hourPx) * 60 - (this._grabOffsetMin || 0);
+        const minutes = this._tl.startHour * 60 + raw;
+        const snapped = Math.round(minutes / 5) * 5;
+        const min = this._tl.startHour * 60;
+        const max = this._tl.endHour * 60 - 5;
+        return Math.min(max, Math.max(min, snapped));
+    }
+
+    onTimelineDragOver(e) {
+        if (this.draggedTask === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const col = e.currentTarget;
+        col.classList.add('drag-over');
+
+        const minutes = this.timeFromPointer(e, col);
+        const top = ((minutes - this._tl.startHour * 60) / 60) * this._tl.hourPx;
+        let ghost = col.querySelector('.tl-ghost');
+        if (!ghost) {
+            document.querySelectorAll('.tl-ghost').forEach(g => g.remove());
+            ghost = document.createElement('div');
+            ghost.className = 'tl-ghost';
+            col.appendChild(ghost);
+        }
+        ghost.style.top = `${top}px`;
+        ghost.textContent = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    }
+
+    onTimelineDragLeave(e) {
+        const col = e.currentTarget;
+        if (!col.contains(e.relatedTarget)) {
+            col.classList.remove('drag-over');
+            col.querySelectorAll('.tl-ghost').forEach(g => g.remove());
+        }
+    }
+
+    async onTimelineDrop(e, dateStr) {
+        e.preventDefault();
+        const taskId = this.draggedTask;
+        const col = e.currentTarget;
+        const minutes = this.timeFromPointer(e, col);
+        this.clearTimelineGhost();
+        this.draggedTask = null;
+        if (!taskId) return;
+
+        const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+        const body = new FormData();
+        body.append('due_date', dateStr);
+        body.append('due_time', time);
+        body.append('csrfmiddlewaretoken', this.csrfToken());
+
+        try {
+            const res = await fetch(`/tasks/${taskId}/update-date/`, { method: 'POST', body });
+            if (!res.ok) throw new Error('save failed');
+        } catch (err) {
+            console.error('Перенос не сохранился', err);
+        }
+        await this.reload();
+    }
+
+    csrfToken() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
     }
 
     renderTimelineChip(task) {
