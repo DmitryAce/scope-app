@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.utils import timezone
+
 from apps.scope.models import Project, Tag, Task
 
 
@@ -39,7 +41,7 @@ def task_to_dict(task: Task) -> dict:
         'completed_at': task.completed_at.isoformat() if task.completed_at else None,
         'due_date': task.due_date.isoformat() if task.due_date else None,
         'due_time': due_time,
-        'reminder': task.reminder.isoformat() if task.reminder else None,
+        'reminder': timezone.localtime(task.reminder).strftime('%Y-%m-%d %H:%M') if task.reminder else None,
         'project_id': task.project_id,
         'order': task.order,
         'is_overdue': task.is_overdue,
