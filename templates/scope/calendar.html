@@ -559,6 +559,10 @@ class KanbanCalendar {
                     ${this.projectMark(task)}
                     ${place ? `<span class="tl-event-place">${this.escapeHtml(place)}</span>` : ''}
                 </div>`;
+        // У пар в описании лежит преподаватель, у прочих задач — первая строка.
+        const summary = task.summary && height >= 80
+            ? `<div class="tl-event-summary">${this.escapeHtml(task.summary)}</div>`
+            : '';
         return `
             <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}"
                  style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${this.priorityColor(task)}"
@@ -567,6 +571,7 @@ class KanbanCalendar {
                  onclick="openTaskEditor(${task.id})">
                 <div class="tl-event-time">${task.time || ''}</div>
                 <div class="tl-event-title">${this.escapeHtml(this.shortTitle(task.title))}</div>
+                ${summary}
                 ${foot}
                 <button class="tl-event-check" title="${task.completed ? 'Вернуть' : 'Завершить'}"
                         onclick="event.stopPropagation(); kanbanCalendar.toggleTaskFromKanban(${task.id})">

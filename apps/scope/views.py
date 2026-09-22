@@ -1178,6 +1178,24 @@ def api_stats(request):
     })
 
 
+def _event_summary(task):
+    """Одна строка описания для карточки в календаре.
+
+    У пар это преподаватель: генератор расписания пишет его строкой
+    «Преподаватель: …» (в старых записях — предпоследней, перед «Группа»).
+    У обычных задач — первая содержательная строка описания.
+    """
+    lines = [ln.strip() for ln in (task.description or '').splitlines() if ln.strip()]
+    if not lines:
+        return ''
+    for ln in lines:
+        if ln.lower().startswith('преподаватель'):
+            return ln.split(':', 1)[-1].strip() or ln
+    if len(lines) >= 2 and lines[-1].lower().startswith('группа'):
+        return lines[-2]
+    return lines[0][:90]
+
+
 @login_required
 @require_GET
 def api_kanban_events(request):
@@ -1204,6 +1222,7 @@ def api_kanban_events(request):
             'start': task.due_date.isoformat(),
             'time': task.due_time.strftime('%H:%M') if task.due_time else None,
             'reminder': timezone.localtime(task.reminder).strftime('%Y-%m-%d %H:%M') if task.reminder else None,
+            'summary': _event_summary(task),
             'priority': task.priority,
             'priority_class': priority_labels.get(task.priority, 'medium'),
             'completed': task.is_completed,
