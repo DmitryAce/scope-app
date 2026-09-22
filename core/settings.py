@@ -152,13 +152,22 @@ STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Прод: манифест + collectstatic. Локально / runserver: файлы из static/ без collectstatic.
 # Иначе при DEBUG=False WhiteNoise смотрит в пустой staticfiles/ → 404 на /static/...
+# Django 5 читает только STORAGES; STATICFILES_STORAGE молча игнорируется, из-за чего
+# прод отдавал статику под неизменным именем — а nginx ставит ей immutable на 30 дней,
+# и свежий CSS не доезжал до браузера, пока не почистишь кэш руками.
 _RUNSERVER = 'runserver' in sys.argv
-if DEBUG or _RUNSERVER:
-    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-    WHITENOISE_USE_FINDERS = True
-else:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-    WHITENOISE_USE_FINDERS = False
+_DEV_STATIC = DEBUG or _RUNSERVER
+WHITENOISE_USE_FINDERS = _DEV_STATIC
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if _DEV_STATIC
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        )
+    },
+}
 
 # =====================
 # Media Files Settings

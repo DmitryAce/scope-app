@@ -365,11 +365,21 @@ class BrowserWindow(QMainWindow):
         error.rejectCertificate()
 
     def _hard_reload(self) -> None:
+        """Ctrl+F5: сброс кэша Chromium и перезагрузка в обход него.
+
+        В Qt 6 у QWebEnginePage нет reload(flag) из Qt 5 — только WebAction,
+        поэтому прежний вызов молча падал и шорткат ничего не делал.
+        """
         page = self.view.page()
         if page is None:
             return
         self.profile.clearHttpCache()
-        page.reload(QWebEnginePage.ReloadBypassCache)
+        # Кэш чистится асинхронно — перезагружаем следующим тиком, иначе успеем
+        # прочитать ещё не удалённые файлы.
+        QTimer.singleShot(
+            150,
+            lambda: page.triggerAction(QWebEnginePage.WebAction.ReloadAndBypassCache),
+        )
 
     def _toggle_fullscreen(self) -> None:
         if self.isFullScreen():
