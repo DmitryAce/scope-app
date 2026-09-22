@@ -2307,10 +2307,9 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 }
 
 .tl-project {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
     flex-shrink: 0;
+    font-weight: 500;
+    opacity: 0.9;
 }
 
 .tl-project-dot {
