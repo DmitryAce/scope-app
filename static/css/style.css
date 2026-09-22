@@ -2046,10 +2046,16 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     font-size: 12px;
     font-weight: 500;
     color: var(--text-primary);
-    display: block;
+    /* Длинные названия переносятся на вторую строку, дальше — многоточие */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
     text-decoration: none;
 }
 
