@@ -548,6 +548,15 @@ class KanbanCalendar {
         return colors[task.priority_class] || 'var(--priority-medium)';
     }
 
+    /** 30 → «30 мин», 60 → «1 ч», 90 → «1:30». */
+    formatDuration(minutes) {
+        const m = Number(minutes) || 0;
+        if (m <= 0) return '';
+        if (m < 60) return `${m} мин`;
+        if (m % 60 === 0) return `${m / 60} ч`;
+        return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+    }
+
     /** Проект — точкой его цвета с подписью, отдельно от приоритета. */
     projectMark(task) {
         if (!task.project) return '';
@@ -559,10 +568,12 @@ class KanbanCalendar {
         const place = this.placeOf(task);
         // Ниже этого подвал с проектом уже не помещается — прячем его.
         const compact = height < 58 ? ' compact' : '';
+        const duration = this.formatDuration(this.eventDuration(task));
         const foot = compact ? '' : `
                 <div class="tl-event-foot">
                     ${this.projectMark(task)}
                     ${place ? `<span class="tl-event-place">${this.escapeHtml(place)}</span>` : ''}
+                    ${duration ? `<span class="tl-event-dur">${duration}</span>` : ''}
                 </div>`;
         // У пар в описании лежит преподаватель, у прочих задач — первая строка.
         const summary = task.summary && height >= 80

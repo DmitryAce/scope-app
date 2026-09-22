@@ -2297,6 +2297,15 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     text-overflow: ellipsis;
 }
 
+.tl-event-dur {
+    margin-left: auto;
+    padding-left: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
 .tl-project {
     display: inline-flex;
     align-items: center;
