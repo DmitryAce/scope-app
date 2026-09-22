@@ -311,7 +311,7 @@ class KanbanCalendar {
     renderMonthItem(task, hidden = false) {
         return `
             <div class="cal-item ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''} ${hidden ? 'extra' : ''}"
-                 style="--tl-accent:${this.priorityColor(task)}${this.projectTint(task, 0.14) ? `; background-image:linear-gradient(0deg, ${this.projectTint(task, 0.14)}, ${this.projectTint(task, 0.14)})` : ''}"
+                 style="--tl-accent:${this.priorityColor(task)}${this.projectTint(task, 0.08) ? `; background-image:linear-gradient(0deg, ${this.projectTint(task, 0.08)}, ${this.projectTint(task, 0.08)})` : ''}"
                  draggable="true"
                  data-task-id="${task.id}"
                  ondragstart="kanbanCalendar.onDragStart(event, ${task.id})"
@@ -578,7 +578,7 @@ class KanbanCalendar {
         // Ниже этого подвал с проектом уже не помещается — прячем его.
         const compact = height < 58 ? ' compact' : '';
         const duration = this.formatDuration(this.eventDuration(task));
-        const tint = this.projectTint(task, 0.16);
+        const tint = this.projectTint(task, 0.09);
         const foot = compact ? '' : `
                 <div class="tl-event-foot">
                     ${this.projectMark(task)}
@@ -701,7 +701,7 @@ class KanbanCalendar {
 
     renderTimelineChip(task) {
         return `
-            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${this.priorityColor(task)}${this.projectTint(task, 0.16) ? `; background-image:linear-gradient(0deg, ${this.projectTint(task, 0.16)}, ${this.projectTint(task, 0.16)})` : ''}"
+            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${this.priorityColor(task)}${this.projectTint(task, 0.09) ? `; background-image:linear-gradient(0deg, ${this.projectTint(task, 0.09)}, ${this.projectTint(task, 0.09)})` : ''}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
                  onclick="openTaskEditor(${task.id})">
                 <span class="tl-chip-title">${this.escapeHtml(this.shortTitle(task.title))}</span>
