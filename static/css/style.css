@@ -1988,8 +1988,8 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 .kanban-task {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 7px;
+    gap: 4px;
+    padding: 3px 6px;
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
     cursor: grab;
@@ -2043,7 +2043,7 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 }
 
 .kanban-task-title {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     color: var(--text-primary);
     /* Длинные названия переносятся на вторую строку, дальше — многоточие */
@@ -2053,7 +2053,7 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     line-clamp: 2;
     white-space: normal;
     overflow-wrap: anywhere;
-    line-height: 1.15;
+    line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
     text-decoration: none;
@@ -2065,8 +2065,8 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 
 .kanban-task-meta {
     display: flex;
-    gap: 5px;
-    font-size: 9px;
+    gap: 4px;
+    font-size: 8px;
     color: var(--text-muted);
     margin-top: 1px;
     min-width: 0;
@@ -3120,14 +3120,15 @@ body.modal-open {
     margin-top: 4px;
 }
 
+/* Название задачи — кнопка. Размер шрифта и обрезку до двух строк задаёт
+   .kanban-task-title выше: `font: inherit` и `display: block` их перебивали. */
 button.kanban-task-title {
-    display: block;
     width: 100%;
     text-align: left;
     background: none;
     border: none;
     padding: 0;
-    font: inherit;
+    font-family: inherit;
     color: inherit;
     cursor: pointer;
 }
