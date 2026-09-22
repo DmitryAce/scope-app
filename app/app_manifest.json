@@ -1,7 +1,8 @@
 {
   "display_name": "Scope",
   "organization_name": "Scope",
-  "start_url": "https://scope.dmace.keenetic.pro/",
+  "start_url": "https://192.168.1.93:1230/",
+  "trusted_insecure_hosts": ["192.168.1.93"],
   "profile_data_folder": "Scope",
   "web_engine_profile_name": "ScopeApp",
   "executable_basename": "Scope",

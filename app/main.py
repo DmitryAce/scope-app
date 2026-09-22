@@ -3,6 +3,11 @@
 Зависимости: PySide6, PySide6-Addons; для сборки ico из сгенерированной иконки: Pillow.
 Сборка exe: из каталога ``app`` — ``make build`` (иконка по манифесту, PyInstaller ``app.spec``).
 Запуск: python main.py
+
+Ctrl+F5 (или Ctrl+Shift+R) — очистка HTTP-кэша и перезагрузка страницы (после обновления сервера).
+
+Сервер в локальной сети отдаёт самоподписанный сертификат: хосты из
+``trusted_insecure_hosts`` манифеста принимаются без предупреждения, остальные — нет.
 """
 
 from __future__ import annotations
@@ -149,6 +154,7 @@ class BrowserWindow(QMainWindow):
 
         self.view = QWebEngineView(self)
         page = QWebEnginePage(self.profile, self.view)
+        page.certificateError.connect(self._on_certificate_error)
         self.view.setPage(page)
         self.view.setUrl(QUrl(manifest.start_url))
 
@@ -167,6 +173,28 @@ class BrowserWindow(QMainWindow):
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.setContext(Qt.ShortcutContext.ApplicationShortcut)
         esc.activated.connect(self._leave_fullscreen_if_needed)
+
+        # Жёсткое обновление после деплоя: сброс HTTP-кэша Chromium + reload без кэша.
+        for seq in (QKeySequence("Ctrl+F5"), QKeySequence("Ctrl+Shift+R")):
+            hard = QShortcut(seq, self)
+            hard.setContext(Qt.ShortcutContext.ApplicationShortcut)
+            hard.activated.connect(self._hard_reload)
+
+    def _on_certificate_error(self, error) -> None:
+        """Самоподписанный сертификат своего сервера — принять, чужой — отклонить."""
+        host = error.url().host().lower()
+        if host in self._manifest.trusted_insecure_hosts:
+            error.acceptCertificate()
+            return
+        print(f"Сертификат отклонён: {host} — {error.description()}", file=sys.stderr)
+        error.rejectCertificate()
+
+    def _hard_reload(self) -> None:
+        page = self.view.page()
+        if page is None:
+            return
+        self.profile.clearHttpCache()
+        page.reload(QWebEnginePage.ReloadBypassCache)
 
     def _toggle_fullscreen(self) -> None:
         if self.isFullScreen():

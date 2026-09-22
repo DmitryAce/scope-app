@@ -16,6 +16,7 @@ class AppManifest:
     display_name: str
     organization_name: str
     start_url: str
+    trusted_insecure_hosts: tuple[str, ...]
     profile_data_folder: str
     web_engine_profile_name: str
     executable_basename: str
@@ -24,6 +25,15 @@ class AppManifest:
     generated_icon_letter: str
     generated_icon_gradient_start: str
     generated_icon_gradient_end: str
+
+
+def _hosts(raw: object) -> tuple[str, ...]:
+    """Хосты, которым разрешён самоподписанный сертификат (локальный сервер)."""
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    return tuple(h.strip().lower() for h in raw if isinstance(h, str) and h.strip())
 
 
 def load_manifest(root: Path) -> AppManifest:
@@ -41,6 +51,7 @@ def load_manifest(root: Path) -> AppManifest:
         display_name=str(raw["display_name"]),
         organization_name=str(raw.get("organization_name") or raw["display_name"]),
         start_url=str(raw["start_url"]),
+        trusted_insecure_hosts=_hosts(raw.get("trusted_insecure_hosts")),
         profile_data_folder=str(raw["profile_data_folder"]),
         web_engine_profile_name=str(raw["web_engine_profile_name"]),
         executable_basename=str(raw["executable_basename"]),
