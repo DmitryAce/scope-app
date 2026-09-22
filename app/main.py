@@ -6,17 +6,23 @@
 
 Ctrl+F5 (или Ctrl+Shift+R) — очистка HTTP-кэша и перезагрузка страницы (после обновления сервера).
 
+Напоминания: приложение живёт в трее и шлёт системные уведомления Windows о задачах
+с временем — за столько минут, сколько выбрано в меню трея. Ключ ``--tray`` стартует
+свёрнутым (для автозагрузки).
+
 Сервер в локальной сети отдаёт самоподписанный сертификат: хосты из
 ``trusted_insecure_hosts`` манифеста принимаются без предупреждения, остальные — нет.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QUrl, Qt
+from PySide6.QtCore import QRectF, QSettings, QTimer, QUrl, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -28,7 +34,8 @@ from PySide6.QtGui import (
     QPixmap,
     QShortcut,
 )
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QSystemTrayIcon
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 
@@ -139,6 +146,121 @@ def app_icon(manifest: AppManifest, base: Path) -> QIcon:
     return icon
 
 
+REMINDER_CHOICES = (0, 5, 10, 15, 30, 60)
+DEFAULT_LEAD_MINUTES = 15
+POLL_INTERVAL_MS = 30_000
+
+# Страница сама держит свежий список задач на сегодня: у неё уже есть сессия,
+# поэтому приложению не нужен отдельный токен к API.
+SNAPSHOT_JS = """
+(function () {
+    if (window.__scopeSnapshotTimer) return 'already';
+    async function pull() {
+        try {
+            const d = new Date();
+            const s = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+                      + '-' + String(d.getDate()).padStart(2, '0');
+            const res = await fetch(`/api/kanban-events/?start=${s}&end=${s}`, {credentials: 'same-origin'});
+            const ct = res.headers.get('content-type') || '';
+            if (!res.ok || ct.indexOf('json') === -1) { window.__scopeSnapshot = null; return; }
+            window.__scopeSnapshot = {at: Date.now(), events: await res.json()};
+        } catch (e) {
+            window.__scopeSnapshot = null;
+        }
+    }
+    pull();
+    window.__scopeSnapshotTimer = setInterval(pull, 30000);
+    return 'started';
+})();
+"""
+
+
+class Reminders:
+    """Системные уведомления Windows о задачах, до которых осталось меньше N минут."""
+
+    def __init__(self, window: QMainWindow, tray: QSystemTrayIcon, settings: QSettings) -> None:
+        self._window = window
+        self._tray = tray
+        self._settings = settings
+        self._notified: set[int] = set()
+        self._day = date.today()
+
+        self._timer = QTimer(window)
+        self._timer.setInterval(POLL_INTERVAL_MS)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+
+    @property
+    def lead_minutes(self) -> int:
+        try:
+            value = int(self._settings.value("reminders/lead_minutes", DEFAULT_LEAD_MINUTES))
+        except (TypeError, ValueError):
+            return DEFAULT_LEAD_MINUTES
+        return value if value in REMINDER_CHOICES else DEFAULT_LEAD_MINUTES
+
+    def set_lead_minutes(self, minutes: int) -> None:
+        self._settings.setValue("reminders/lead_minutes", int(minutes))
+        # Другой интервал — другие задачи попадают в окно предупреждения.
+        self._notified.clear()
+
+    def install_snapshot(self) -> None:
+        """Вживить в страницу сборщик задач (после каждой загрузки)."""
+        page = self._window.view.page()
+        if page is not None:
+            page.runJavaScript(SNAPSHOT_JS)
+
+    def _tick(self) -> None:
+        if self.lead_minutes == 0:
+            return
+        page = self._window.view.page()
+        if page is None:
+            return
+        page.runJavaScript("JSON.stringify(window.__scopeSnapshot || null)", self._on_snapshot)
+
+    def _on_snapshot(self, raw) -> None:
+        if not raw:
+            return
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+
+        today = date.today()
+        if today != self._day:
+            self._day = today
+            self._notified.clear()
+
+        lead = self.lead_minutes
+        now = datetime.now()
+        for event in data.get("events") or []:
+            if not isinstance(event, dict) or event.get("completed"):
+                continue
+            raw_time = event.get("time")
+            task_id = event.get("id")
+            if not raw_time or task_id in self._notified:
+                continue
+            try:
+                start_at = datetime.combine(today, datetime.strptime(raw_time, "%H:%M").time())
+            except ValueError:
+                continue
+
+            left = (start_at - now) / timedelta(minutes=1)
+            if 0 < left <= lead:
+                self._notified.add(task_id)
+                self._notify(event, max(1, int(round(left))), raw_time)
+
+    def _notify(self, event: dict, minutes_left: int, at: str) -> None:
+        title = f"Через {minutes_left} мин · {at}"
+        body = str(event.get("title") or "Задача")
+        project = event.get("project")
+        if project:
+            body += f"\n{project}"
+        print(f"[напоминание] {title} — {body}".replace("\n", " · "), file=sys.stderr)
+        self._tray.showMessage(title, body, QSystemTrayIcon.MessageIcon.Information, 15000)
+
+
 class BrowserWindow(QMainWindow):
     def __init__(self, manifest: AppManifest, base: Path) -> None:
         super().__init__()
@@ -180,6 +302,31 @@ class BrowserWindow(QMainWindow):
             hard.setContext(Qt.ShortcutContext.ApplicationShortcut)
             hard.activated.connect(self._hard_reload)
 
+        self.reminders: Reminders | None = None
+        self._tray_hint_shown = False
+        self.view.loadFinished.connect(self._on_load_finished)
+
+    def _on_load_finished(self, ok: bool) -> None:
+        if ok and self.reminders is not None:
+            self.reminders.install_snapshot()
+
+    def closeEvent(self, event) -> None:
+        """Крестик прячет окно в трей — иначе напоминания умирают вместе с окном."""
+        tray = getattr(self, "tray", None)
+        if tray is not None and tray.isVisible():
+            event.ignore()
+            self.hide()
+            if not self._tray_hint_shown:
+                self._tray_hint_shown = True
+                tray.showMessage(
+                    self._manifest.display_name,
+                    "Свёрнут в трей и следит за расписанием.\nВыход — правой кнопкой по значку.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    6000,
+                )
+            return
+        super().closeEvent(event)
+
     def _on_certificate_error(self, error) -> None:
         """Самоподписанный сертификат своего сервера — принять, чужой — отклонить."""
         host = error.url().host().lower()
@@ -216,6 +363,56 @@ class BrowserWindow(QMainWindow):
         super().keyPressEvent(event)
 
 
+def build_tray(window: BrowserWindow, icon: QIcon, manifest: AppManifest, settings: QSettings) -> QSystemTrayIcon:
+    """Значок в трее: показать окно, выбрать интервал напоминаний, выйти."""
+    tray = QSystemTrayIcon(icon, window)
+    tray.setToolTip(manifest.display_name)
+
+    menu = QMenu()
+    open_action = QAction("Открыть Scope", menu)
+    open_action.triggered.connect(lambda: _show_window(window))
+    menu.addAction(open_action)
+
+    menu.addSeparator()
+    reminders_menu = menu.addMenu("Напоминать")
+    group = QActionGroup(menu)
+    group.setExclusive(True)
+
+    window.tray = tray  # noqa: B010 — closeEvent проверяет наличие трея
+    reminders = Reminders(window, tray, settings)
+    window.reminders = reminders
+
+    for minutes in REMINDER_CHOICES:
+        label = "Не напоминать" if minutes == 0 else f"за {minutes} мин"
+        action = QAction(label, reminders_menu)
+        action.setCheckable(True)
+        action.setChecked(minutes == reminders.lead_minutes)
+        action.triggered.connect(lambda _checked=False, m=minutes: reminders.set_lead_minutes(m))
+        group.addAction(action)
+        reminders_menu.addAction(action)
+
+    menu.addSeparator()
+    quit_action = QAction("Выход", menu)
+    quit_action.triggered.connect(QApplication.quit)
+    menu.addAction(quit_action)
+
+    tray.setContextMenu(menu)
+    tray.activated.connect(
+        lambda reason: _show_window(window)
+        if reason == QSystemTrayIcon.ActivationReason.Trigger
+        else None
+    )
+    tray.messageClicked.connect(lambda: _show_window(window))
+    tray.show()
+    return tray
+
+
+def _show_window(window: QMainWindow) -> None:
+    window.showNormal()
+    window.raise_()
+    window.activateWindow()
+
+
 def main() -> int:
     base = app_base_dir()
     manifest = load_manifest(base)
@@ -223,10 +420,19 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(manifest.display_name)
     app.setOrganizationName(manifest.organization_name)
-    app.setWindowIcon(app_icon(manifest, base))
+    icon = app_icon(manifest, base)
+    app.setWindowIcon(icon)
 
     window = BrowserWindow(manifest, base)
-    window.show()
+
+    settings = QSettings(manifest.organization_name, manifest.display_name)
+    if QSystemTrayIcon.isSystemTrayAvailable():
+        build_tray(window, icon, manifest, settings)
+        # Окно закрыто — приложение живёт в трее и продолжает напоминать.
+        app.setQuitOnLastWindowClosed(False)
+
+    if "--tray" not in sys.argv:
+        window.show()
 
     return app.exec()
 
