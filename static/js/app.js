@@ -455,6 +455,10 @@ function openTaskModal(defaults = {}) {
         const i = form.querySelector('input[name="due_date"]');
         if (i) i.value = defaults.due_date;
     }
+    if (defaults.due_time && form) {
+        const i = form.querySelector('input[name="due_time"]');
+        if (i) i.value = defaults.due_time;
+    }
 
     resetCreateChecklistDraft();
     setTimeout(() => form?.querySelector('input[name="title"]')?.focus(), 100);

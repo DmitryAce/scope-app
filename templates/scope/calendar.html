@@ -238,6 +238,12 @@ class KanbanCalendar {
         this.syncViewChrome();
         const todayStr = this.getTodayStr();
 
+        if (this.viewMode === 'week') {
+            container.innerHTML = this.renderTimeline(weeks[0]);
+            this.scrollTimelineToWork();
+            return;
+        }
+
         // По умолчанию все недели раскрыты (после смены месяца expandedWeeks пустой — снова всё раскрываем)
         if (this.expandedWeeks.size === 0) {
             for (let i = 0; i < weeks.length; i++) {
@@ -354,6 +360,230 @@ class KanbanCalendar {
                  ondragover="kanbanCalendar.onSlotDragOver(event)"
                  ondragleave="kanbanCalendar.onSlotDragLeave(event)"
                  ondrop="kanbanCalendar.onSlotDrop(event)"></div>`;
+    }
+
+    // ---------------------------------------------------------- таймлайн недели
+
+    /** Показать сначала рабочие часы: к первому событию недели или к 8 утра. */
+    scrollTimelineToWork() {
+        const body = document.querySelector('.tl-body');
+        if (!body) return;
+        const firstEvent = body.querySelector('.tl-event');
+        const offset = firstEvent ? Math.max(0, parseFloat(firstEvent.style.top) - 40) : 0;
+        body.scrollTop = offset;
+    }
+
+    /** Минуты от полуночи, если у задачи есть время. */
+    eventStartMinutes(task) {
+        if (!task.time) return null;
+        const [h, m] = String(task.time).split(':').map(Number);
+        if (Number.isNaN(h) || Number.isNaN(m)) return null;
+        return h * 60 + m;
+    }
+
+    /** Пара идёт 1:30, прочее показываем часовым блоком. */
+    eventDuration(task) {
+        const tags = task.tags || [];
+        return tags.some(t => (t.name || '').toLowerCase() === 'пары') ? 90 : 60;
+    }
+
+    /** Ширину делят только реально пересекающиеся события — соседние по времени не жмутся. */
+    layoutDay(events) {
+        const sorted = events.slice().sort((a, b) => a._start - b._start);
+
+        let cluster = [];
+        let clusterEnd = -1;
+        let columns = [];
+
+        const closeCluster = () => {
+            const cols = Math.max(1, columns.length);
+            cluster.forEach(ev => { ev._cols = cols; });
+            cluster = [];
+            columns = [];
+            clusterEnd = -1;
+        };
+
+        sorted.forEach(ev => {
+            if (cluster.length && ev._start >= clusterEnd) closeCluster();
+
+            let placed = false;
+            for (let i = 0; i < columns.length; i++) {
+                const last = columns[i][columns[i].length - 1];
+                if (last._end <= ev._start) {
+                    columns[i].push(ev);
+                    ev._col = i;
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                ev._col = columns.length;
+                columns.push([ev]);
+            }
+
+            cluster.push(ev);
+            clusterEnd = Math.max(clusterEnd, ev._end);
+        });
+        closeCluster();
+
+        return sorted;
+    }
+
+    renderTimeline(week) {
+        const dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+        const todayStr = this.getTodayStr();
+        const HOUR_PX = 54;
+
+        const byDay = week.days.map(day => {
+            const all = this.events.filter(e => e.start === day.dateStr);
+            const timed = [];
+            const untimed = [];
+            all.forEach(e => {
+                const start = this.eventStartMinutes(e);
+                if (start === null) {
+                    untimed.push(e);
+                } else {
+                    e._start = start;
+                    e._end = start + this.eventDuration(e);
+                    timed.push(e);
+                }
+            });
+            return { day, timed: this.layoutDay(timed), untimed };
+        });
+
+        // Диапазон часов — по событиям недели, но не уже рабочего дня 8–21.
+        let first = 8 * 60;
+        let last = 21 * 60;
+        byDay.forEach(({ timed }) => timed.forEach(e => {
+            first = Math.min(first, e._start);
+            last = Math.max(last, e._end);
+        }));
+        const startHour = Math.floor(first / 60);
+        const endHour = Math.ceil(last / 60);
+        const hours = [];
+        for (let h = startHour; h <= endHour; h++) hours.push(h);
+        const gridHeight = (endHour - startHour) * HOUR_PX;
+        const topOf = minutes => ((minutes - startHour * 60) / 60) * HOUR_PX;
+
+        const hasAllDay = byDay.some(d => d.untimed.length > 0);
+
+        let head = '<div class="tl-corner"></div>';
+        byDay.forEach(({ day }, idx) => {
+            const cls = [
+                'tl-day-head',
+                day.isToday ? 'today' : '',
+                idx >= 5 ? 'weekend' : '',
+                day.dateStr < todayStr && !day.isToday ? 'past' : '',
+            ].filter(Boolean).join(' ');
+            head += `
+                <div class="${cls}">
+                    <span class="tl-day-name">${dayNames[idx]}</span>
+                    <span class="tl-day-num">${day.date.getDate()}</span>
+                </div>`;
+        });
+
+        let allday = '';
+        if (hasAllDay) {
+            allday = '<div class="tl-allday"><div class="tl-allday-label">без времени</div>';
+            byDay.forEach(({ day, untimed }, idx) => {
+                allday += `<div class="tl-allday-col ${idx >= 5 ? 'weekend' : ''}" data-date="${day.dateStr}">`;
+                untimed.forEach(task => { allday += this.renderTimelineChip(task); });
+                allday += '</div>';
+            });
+            allday += '</div>';
+        }
+
+        let axis = '';
+        hours.forEach((h, i) => {
+            if (i === hours.length - 1) return;
+            axis += `<div class="tl-hour" style="height:${HOUR_PX}px"><span>${String(h).padStart(2, '0')}:00</span></div>`;
+        });
+
+        let grid = '';
+        byDay.forEach(({ day, timed }, idx) => {
+            const cls = [
+                'tl-col',
+                day.isToday ? 'today' : '',
+                idx >= 5 ? 'weekend' : '',
+                day.dateStr < todayStr && !day.isToday ? 'past' : '',
+            ].filter(Boolean).join(' ');
+
+            let cells = '';
+            hours.forEach((h, i) => {
+                if (i === hours.length - 1) return;
+                cells += `<div class="tl-slot" style="height:${HOUR_PX}px"
+                               onclick="openTaskModal({due_date: '${day.dateStr}', due_time: '${String(h).padStart(2, '0')}:00'})"
+                               title="Новая задача в ${String(h).padStart(2, '0')}:00"></div>`;
+            });
+
+            let blocks = '';
+            timed.forEach(task => {
+                const top = topOf(task._start);
+                const height = Math.max(26, ((task._end - task._start) / 60) * HOUR_PX - 3);
+                const width = 100 / task._cols;
+                blocks += this.renderTimelineEvent(task, top, height, task._col * width, width);
+            });
+
+            let nowLine = '';
+            if (day.isToday) {
+                const now = new Date();
+                const mins = now.getHours() * 60 + now.getMinutes();
+                if (mins >= startHour * 60 && mins <= endHour * 60) {
+                    nowLine = `<div class="tl-now" style="top:${topOf(mins)}px"></div>`;
+                }
+            }
+
+            grid += `<div class="${cls}" style="height:${gridHeight}px">${cells}${blocks}${nowLine}</div>`;
+        });
+
+        return `
+            <div class="tl">
+                <div class="tl-head">${head}</div>
+                ${allday}
+                <div class="tl-body">
+                    <div class="tl-axis">${axis}</div>
+                    <div class="tl-grid">${grid}</div>
+                </div>
+            </div>`;
+    }
+
+    renderTimelineEvent(task, top, height, left, width) {
+        const priorityColors = { low: 'var(--priority-low)', medium: 'var(--priority-medium)', high: 'var(--priority-high)', urgent: 'var(--priority-urgent)' };
+        const accent = task.projectColor || priorityColors[task.priority_class] || 'var(--accent-primary)';
+        const place = this.placeOf(task);
+        const compact = height < 44 ? ' compact' : '';
+        return `
+            <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}"
+                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${accent}"
+                 data-task-id="${task.id}"
+                 title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
+                 onclick="openTaskEditor(${task.id})">
+                <div class="tl-event-time">${task.time || ''}</div>
+                <div class="tl-event-title">${this.escapeHtml(this.shortTitle(task.title))}</div>
+                ${place && !compact ? `<div class="tl-event-place">${this.escapeHtml(place)}</div>` : ''}
+                <button class="tl-event-check" title="${task.completed ? 'Вернуть' : 'Завершить'}"
+                        onclick="event.stopPropagation(); kanbanCalendar.toggleTaskFromKanban(${task.id})">
+                    <i class="${task.completed ? 'ri-checkbox-circle-fill' : 'ri-checkbox-blank-circle-line'}"></i>
+                </button>
+            </div>`;
+    }
+
+    renderTimelineChip(task) {
+        const accent = task.projectColor || 'var(--accent-primary)';
+        return `
+            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${accent}"
+                 title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
+                 onclick="openTaskEditor(${task.id})">${this.escapeHtml(this.shortTitle(task.title))}</div>`;
+    }
+
+    /** «ITIL — лекция (И-204-в)» → «ITIL — лекция»: аудитория едет отдельной строкой. */
+    shortTitle(title) {
+        return String(title).replace(/\s*\([^)]*\)\s*$/, '').trim() || String(title);
+    }
+
+    placeOf(task) {
+        const m = String(task.title).match(/\(([^)]*)\)\s*$/);
+        return m ? m[1] : '';
     }
 
     renderTask(task, doneBlockStart) {
