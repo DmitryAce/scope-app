@@ -506,7 +506,7 @@ class KanbanCalendar {
             let blocks = '';
             timed.forEach(task => {
                 const top = topOf(task._start);
-                const height = Math.max(30, ((task._end - task._start) / 60) * HOUR_PX - 3);
+                const height = Math.max(34, ((task._end - task._start) / 60) * HOUR_PX - 3);
                 const width = 100 / task._cols;
                 blocks += this.renderTimelineEvent(task, top, height, task._col * width, width);
             });

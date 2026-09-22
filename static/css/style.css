@@ -2323,15 +2323,23 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     white-space: nowrap;
 }
 
+/* Короткий блок — одна строка: время и название рядом */
 .tl-event.compact {
-    display: flex;
+    flex-direction: row;
     align-items: center;
     gap: 6px;
-    padding: 2px 6px;
+    padding: 2px 7px;
+}
+
+.tl-event.compact .tl-event-time {
+    flex-shrink: 0;
 }
 
 .tl-event.compact .tl-event-title {
     -webkit-line-clamp: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tl-event.completed {
