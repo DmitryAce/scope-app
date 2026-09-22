@@ -311,7 +311,7 @@ class KanbanCalendar {
     renderMonthItem(task, hidden = false) {
         return `
             <div class="cal-item ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''} ${hidden ? 'extra' : ''}"
-                 style="--tl-accent:${this.priorityColor(task)}"
+                 style="--tl-accent:${this.priorityColor(task)}${this.projectTint(task, 0.14) ? `; background-image:linear-gradient(0deg, ${this.projectTint(task, 0.14)}, ${this.projectTint(task, 0.14)})` : ''}"
                  draggable="true"
                  data-task-id="${task.id}"
                  ondragstart="kanbanCalendar.onDragStart(event, ${task.id})"
@@ -548,6 +548,15 @@ class KanbanCalendar {
         return colors[task.priority_class] || 'var(--priority-medium)';
     }
 
+    /** Лёгкая заливка цветом проекта: карточки разных проектов различимы с одного взгляда. */
+    projectTint(task, alpha) {
+        const hex = String(task.projectColor || '').trim();
+        const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+        if (!m) return '';
+        const n = parseInt(m[1], 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    }
+
     /** 30 → «30 мин», 60 → «1 ч», 90 → «1:30». */
     formatDuration(minutes) {
         const m = Number(minutes) || 0;
@@ -569,6 +578,7 @@ class KanbanCalendar {
         // Ниже этого подвал с проектом уже не помещается — прячем его.
         const compact = height < 58 ? ' compact' : '';
         const duration = this.formatDuration(this.eventDuration(task));
+        const tint = this.projectTint(task, 0.16);
         const foot = compact ? '' : `
                 <div class="tl-event-foot">
                     ${this.projectMark(task)}
@@ -581,7 +591,7 @@ class KanbanCalendar {
             : '';
         return `
             <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}"
-                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${this.priorityColor(task)}"
+                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${this.priorityColor(task)}${tint ? `; background-image:linear-gradient(0deg, ${tint}, ${tint})` : ''}"
                  draggable="true"
                  ondragstart="kanbanCalendar.onTimelineDragStart(event, ${task.id})"
                  ondragend="kanbanCalendar.onTimelineDragEnd(event)"
@@ -691,7 +701,7 @@ class KanbanCalendar {
 
     renderTimelineChip(task) {
         return `
-            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${this.priorityColor(task)}"
+            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${this.priorityColor(task)}${this.projectTint(task, 0.16) ? `; background-image:linear-gradient(0deg, ${this.projectTint(task, 0.16)}, ${this.projectTint(task, 0.16)})` : ''}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
                  onclick="openTaskEditor(${task.id})">
                 <span class="tl-chip-title">${this.escapeHtml(this.shortTitle(task.title))}</span>
