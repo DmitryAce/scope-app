@@ -102,7 +102,7 @@ class KanbanCalendar {
 
     scrollToTodayCell(smooth) {
         if (this.isStale()) return;
-        const el = document.querySelector('#kanbanWeeks .kanban-day.today');
+        const el = document.querySelector('#kanbanWeeks .cal-cell.today');
         if (!el) return;
         el.scrollIntoView({
             behavior: smooth ? 'smooth' : 'instant',
@@ -244,49 +244,22 @@ class KanbanCalendar {
             return;
         }
 
-        // По умолчанию все недели раскрыты (после смены месяца expandedWeeks пустой — снова всё раскрываем)
-        if (this.expandedWeeks.size === 0) {
-            for (let i = 0; i < weeks.length; i++) {
-                this.expandedWeeks.add(i);
-            }
-        }
+        if (this.isStale()) return;
+        container.innerHTML = this.renderMonthGrid(weeks, todayStr, m);
+    }
 
-        const dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-        const monthNamesShort = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+    // ---------------------------------------------------------- месяц сеткой
 
-        let html = '';
+    renderMonthGrid(weeks, todayStr, month) {
+        const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-        weeks.forEach((week, wIdx) => {
-            const isExpanded = this.expandedWeeks.has(wIdx);
-            const weekEvents = this.events.filter(e =>
-                e.start >= week.startStr && e.start <= week.endStr
-            );
-            const activeEvents = weekEvents.filter(e => !e.completed);
-            const completedCount = weekEvents.filter(e => e.completed).length;
+        let head = '';
+        dayNames.forEach((name, i) => {
+            head += `<div class="cal-head-cell ${i >= 5 ? 'weekend' : ''}">${name}</div>`;
+        });
 
-            const hasToday = week.days.some(d => d.isToday);
-
-            const startD = week.days[0].date;
-            const endD = week.days[6].date;
-            const startLabel = `${startD.getDate()} ${monthNamesShort[startD.getMonth()]}`;
-            const endLabel = `${endD.getDate()} ${monthNamesShort[endD.getMonth()]}`;
-
-            html += `
-            <div class="kanban-week ${isExpanded ? 'expanded' : ''} ${hasToday ? 'has-today' : ''}">
-                <div class="kanban-week-header" onclick="kanbanCalendar.toggleWeek(${wIdx})">
-                    <div class="kanban-week-left">
-                        <i class="ri-arrow-right-s-line kanban-chevron"></i>
-                        <span class="kanban-week-label">${startLabel} — ${endLabel}</span>
-                        ${hasToday ? '<span class="kanban-today-badge">сейчас</span>' : ''}
-                    </div>
-                    <div class="kanban-week-right">
-                        ${activeEvents.length > 0 ? `<span class="kanban-week-count">${activeEvents.length} ${this.pluralize(activeEvents.length, 'задача', 'задачи', 'задач')}</span>` : ''}
-                        ${completedCount > 0 ? `<span class="kanban-week-done"><i class="ri-check-line"></i> ${completedCount}</span>` : ''}
-                    </div>
-                </div>
-                <div class="kanban-week-body" style="${isExpanded ? '' : 'display:none'}">
-                    <div class="kanban-days">`;
-
+        let cells = '';
+        weeks.forEach(week => {
             week.days.forEach((day, dIdx) => {
                 const dayEvents = this.events
                     .filter(e => e.start === day.dateStr)
@@ -294,62 +267,71 @@ class KanbanCalendar {
                         const ac = a.completed ? 1 : 0;
                         const bc = b.completed ? 1 : 0;
                         if (ac !== bc) return ac - bc;
-                        const oa = Number(a.order) || 0;
-                        const ob = Number(b.order) || 0;
-                        if (oa !== ob) return oa - ob;
+                        const at = a.time || '99:99';
+                        const bt = b.time || '99:99';
+                        if (at !== bt) return at < bt ? -1 : 1;
                         return a.id - b.id;
                     });
-                const isPast = day.dateStr < todayStr && !day.isToday;
-                const isWeekend = dIdx >= 5;
-                const firstTaskId = dayEvents.length ? String(dayEvents[0].id) : '';
 
-                html += `
-                    <div class="kanban-day ${day.isToday ? 'today' : ''} ${!day.isCurrentMonth ? 'other-month' : ''} ${isPast ? 'past' : ''} ${isWeekend ? 'weekend' : ''}"
-                         data-date="${day.dateStr}"
+                const cls = [
+                    'cal-cell',
+                    day.isToday ? 'today' : '',
+                    !day.isCurrentMonth ? 'other-month' : '',
+                    day.dateStr < todayStr && !day.isToday ? 'past' : '',
+                    dIdx >= 5 ? 'weekend' : '',
+                ].filter(Boolean).join(' ');
+
+                const shown = dayEvents.slice(0, 4);
+                const rest = dayEvents.length - shown.length;
+
+                let items = shown.map(task => this.renderMonthItem(task)).join('');
+                items += dayEvents.slice(4).map(task => this.renderMonthItem(task, true)).join('');
+
+                cells += `
+                    <div class="${cls}" data-date="${day.dateStr}"
                          ondragover="kanbanCalendar.onDragOverDay(event)"
                          ondragleave="kanbanCalendar.onDragLeaveDay(event)"
                          ondrop="kanbanCalendar.onDropDay(event, '${day.dateStr}')">
-                        <div class="kanban-day-header kanban-day-drop-start"
-                             ondragover="kanbanCalendar.onDragOverDayStart(event)"
-                             ondragleave="kanbanCalendar.onDragLeaveDayStart(event)"
-                             ondrop="kanbanCalendar.onDropDayStart(event, '${day.dateStr}', '${firstTaskId}')">
-                            <span class="kanban-day-name">${dayNames[dIdx]}</span>
-                            <span class="kanban-day-num ${day.isToday ? 'today-num' : ''}">${day.date.getDate()}</span>
-                        </div>
-                        <div class="kanban-day-tasks">`;
-
-                if (dayEvents.length === 0) {
-                    html += this.renderDropSlot(day.dateStr, '', true);
-                } else {
-                    dayEvents.forEach((task, idx) => {
-                        html += this.renderDropSlot(day.dateStr, String(task.id), false);
-                        const doneStart = task.completed && idx > 0 && !dayEvents[idx - 1].completed;
-                        html += this.renderTask(task, doneStart);
-                    });
-                    html += this.renderDropSlot(day.dateStr, '', false);
-                }
-
-                html += `
-                        </div>
-                        <div class="kanban-day-drop-end"
-                             ondragover="kanbanCalendar.onDragOverDayEnd(event)"
-                             ondragleave="kanbanCalendar.onDragLeaveDayEnd(event)"
-                             ondrop="kanbanCalendar.onDropDayEnd(event, '${day.dateStr}')">
-                            <button type="button" class="kanban-add-btn" onclick="openTaskModal({due_date: '${day.dateStr}'})" title="Добавить задачу">
+                        <div class="cal-cell-head">
+                            <span class="cal-num">${day.date.getDate()}</span>
+                            <button type="button" class="cal-add" title="Новая задача"
+                                    onclick="event.stopPropagation(); openTaskModal({due_date: '${day.dateStr}'})">
                                 <i class="ri-add-line"></i>
                             </button>
                         </div>
+                        <div class="cal-items">${items}</div>
+                        ${rest > 0 ? `<button type="button" class="cal-more" onclick="kanbanCalendar.toggleCell(this)">ещё ${rest}</button>` : ''}
                     </div>`;
             });
-
-            html += `
-                    </div>
-                </div>
-            </div>`;
         });
 
-        if (this.isStale()) return;
-        container.innerHTML = html;
+        return `<div class="cal"><div class="cal-head">${head}</div><div class="cal-grid">${cells}</div></div>`;
+    }
+
+    renderMonthItem(task, hidden = false) {
+        return `
+            <div class="cal-item ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''} ${hidden ? 'extra' : ''}"
+                 style="--tl-accent:${this.priorityColor(task)}"
+                 draggable="true"
+                 data-task-id="${task.id}"
+                 ondragstart="kanbanCalendar.onDragStart(event, ${task.id})"
+                 ondragend="kanbanCalendar.onDragEnd(event)"
+                 title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
+                 onclick="openTaskEditor(${task.id})">
+                ${task.time ? `<span class="cal-item-time">${task.time}</span>` : ''}
+                <span class="cal-item-title">${this.escapeHtml(this.shortTitle(task.title))}</span>
+                ${task.project ? `<span class="cal-item-dot" style="background:${task.projectColor || 'var(--accent-secondary)'}" title="${this.escapeHtml(task.project)}"></span>` : ''}
+            </div>`;
+    }
+
+    /** «ещё N» раскрывает день целиком. */
+    toggleCell(btn) {
+        const cell = btn.closest('.cal-cell');
+        if (!cell) return;
+        cell.classList.toggle('expanded');
+        btn.textContent = cell.classList.contains('expanded')
+            ? 'свернуть'
+            : `ещё ${cell.querySelectorAll('.cal-item.extra').length}`;
     }
 
     renderDropSlot(dateStr, beforeId, isEmpty) {
@@ -547,20 +529,41 @@ class KanbanCalendar {
             </div>`;
     }
 
+    /** Чёрточка слева — всегда приоритет задачи. */
+    priorityColor(task) {
+        const colors = {
+            low: 'var(--priority-low)',
+            medium: 'var(--priority-medium)',
+            high: 'var(--priority-high)',
+            urgent: 'var(--priority-urgent)',
+        };
+        return colors[task.priority_class] || 'var(--priority-medium)';
+    }
+
+    /** Проект — точкой его цвета с подписью, отдельно от приоритета. */
+    projectMark(task) {
+        if (!task.project) return '';
+        const color = task.projectColor || 'var(--accent-secondary)';
+        return `<span class="tl-project"><span class="tl-project-dot" style="background:${color}"></span>${this.escapeHtml(task.project)}</span>`;
+    }
+
     renderTimelineEvent(task, top, height, left, width) {
-        const priorityColors = { low: 'var(--priority-low)', medium: 'var(--priority-medium)', high: 'var(--priority-high)', urgent: 'var(--priority-urgent)' };
-        const accent = task.projectColor || priorityColors[task.priority_class] || 'var(--accent-primary)';
         const place = this.placeOf(task);
-        const compact = height < 44 ? ' compact' : '';
+        const compact = height < 46 ? ' compact' : '';
+        const foot = compact ? '' : `
+                <div class="tl-event-foot">
+                    ${this.projectMark(task)}
+                    ${place ? `<span class="tl-event-place">${this.escapeHtml(place)}</span>` : ''}
+                </div>`;
         return `
             <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}"
-                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${accent}"
+                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${this.priorityColor(task)}"
                  data-task-id="${task.id}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
                  onclick="openTaskEditor(${task.id})">
                 <div class="tl-event-time">${task.time || ''}</div>
                 <div class="tl-event-title">${this.escapeHtml(this.shortTitle(task.title))}</div>
-                ${place && !compact ? `<div class="tl-event-place">${this.escapeHtml(place)}</div>` : ''}
+                ${foot}
                 <button class="tl-event-check" title="${task.completed ? 'Вернуть' : 'Завершить'}"
                         onclick="event.stopPropagation(); kanbanCalendar.toggleTaskFromKanban(${task.id})">
                     <i class="${task.completed ? 'ri-checkbox-circle-fill' : 'ri-checkbox-blank-circle-line'}"></i>
@@ -569,11 +572,13 @@ class KanbanCalendar {
     }
 
     renderTimelineChip(task) {
-        const accent = task.projectColor || 'var(--accent-primary)';
         return `
-            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${accent}"
+            <div class="tl-chip ${task.completed ? 'completed' : ''}" style="--tl-accent:${this.priorityColor(task)}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
-                 onclick="openTaskEditor(${task.id})">${this.escapeHtml(this.shortTitle(task.title))}</div>`;
+                 onclick="openTaskEditor(${task.id})">
+                <span class="tl-chip-title">${this.escapeHtml(this.shortTitle(task.title))}</span>
+                ${this.projectMark(task)}
+            </div>`;
     }
 
     /** «ITIL — лекция (И-204-в)» → «ITIL — лекция»: аудитория едет отдельной строкой. */
@@ -789,54 +794,20 @@ class KanbanCalendar {
         }
     }
 
-    toggleWeek(idx) {
-        if (this.expandedWeeks.has(idx)) {
-            this.expandedWeeks.delete(idx);
-        } else {
-            this.expandedWeeks.add(idx);
-        }
-        const weekEls = document.querySelectorAll('.kanban-week');
-        const el = weekEls[idx];
-        if (!el) return;
-
-        const body = el.querySelector('.kanban-week-body');
-        if (this.expandedWeeks.has(idx)) {
-            el.classList.add('expanded');
-            body.style.display = '';
-            body.style.maxHeight = '0';
-            body.style.overflow = 'hidden';
-            body.style.transition = 'max-height 0.4s ease';
-            requestAnimationFrame(() => { body.style.maxHeight = body.scrollHeight + 'px'; });
-            setTimeout(() => { body.style.maxHeight = ''; body.style.overflow = ''; }, 400);
-        } else {
-            el.classList.remove('expanded');
-            body.style.maxHeight = body.scrollHeight + 'px';
-            body.style.overflow = 'hidden';
-            body.style.transition = 'max-height 0.3s ease';
-            requestAnimationFrame(() => { body.style.maxHeight = '0'; });
-            setTimeout(() => { body.style.display = 'none'; body.style.overflow = ''; }, 300);
-        }
-    }
-
+    /** Показать в каждом дне все задачи, а не первые четыре. */
     expandAll() {
-        const weekEls = document.querySelectorAll('.kanban-week');
-        weekEls.forEach((el, idx) => {
-            this.expandedWeeks.add(idx);
-            el.classList.add('expanded');
-            const body = el.querySelector('.kanban-week-body');
-            body.style.display = '';
-            body.style.maxHeight = '';
-            body.style.overflow = '';
+        document.querySelectorAll('.cal-cell').forEach(cell => {
+            cell.classList.add('expanded');
+            const more = cell.querySelector('.cal-more');
+            if (more) more.textContent = 'свернуть';
         });
     }
 
     collapseAll() {
-        const weekEls = document.querySelectorAll('.kanban-week');
-        weekEls.forEach((el, idx) => {
-            this.expandedWeeks.delete(idx);
-            el.classList.remove('expanded');
-            const body = el.querySelector('.kanban-week-body');
-            body.style.display = 'none';
+        document.querySelectorAll('.cal-cell').forEach(cell => {
+            cell.classList.remove('expanded');
+            const more = cell.querySelector('.cal-more');
+            if (more) more.textContent = `ещё ${cell.querySelectorAll('.cal-item.extra').length}`;
         });
     }
 
@@ -850,14 +821,15 @@ class KanbanCalendar {
         if (monthBtn) monthBtn.classList.toggle('active', this.viewMode === 'month');
         if (weekBtn) weekBtn.classList.toggle('active', this.viewMode === 'week');
 
+        // «Раскрыть все / Свернуть» относятся к дням месяца — в неделе их нет.
         const expand = document.getElementById('kanbanExpandActions');
         if (expand) expand.hidden = this.viewMode === 'week';
 
         const prev = document.getElementById('kanbanPrevBtn');
         const next = document.getElementById('kanbanNextBtn');
         const unit = this.viewMode === 'week' ? 'неделя' : 'месяц';
-        if (prev) prev.title = `Предыдущая ${unit === 'неделя' ? 'неделя' : 'месяц'}`;
-        if (next) next.title = `Следующая ${unit === 'неделя' ? 'неделя' : 'месяц'}`;
+        if (prev) prev.title = unit === 'неделя' ? 'Предыдущая неделя' : 'Предыдущий месяц';
+        if (next) next.title = unit === 'неделя' ? 'Следующая неделя' : 'Следующий месяц';
     }
 
     setViewMode(mode) {
