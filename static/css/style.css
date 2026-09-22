@@ -1632,6 +1632,14 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 
 .kanban-actions {
     display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Группа кнопок внутри тулбара: без flex обёртка ломает ряд по baseline */
+.kanban-actions-group {
+    display: flex;
+    align-items: center;
     gap: 8px;
 }
 
@@ -1804,17 +1812,31 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     display: none;
 }
 
+/* Переключатель вида — цельный сегмент, а не две отдельные кнопки */
 .kanban-view-switch {
     display: inline-flex;
+    align-items: center;
     gap: 2px;
     padding: 2px;
     background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    margin-right: 4px;
+}
+
+.kanban-view-switch .btn {
+    border: none;
+    background: transparent;
     border-radius: 8px;
-    margin-right: 6px;
 }
 
 .kanban-view-switch .btn.active {
     background: var(--accent-primary);
+    color: #fff;
+}
+
+.kanban-view-switch .btn.active:hover {
+    background: var(--accent-primary-hover);
     color: #fff;
 }
 
@@ -2991,10 +3013,29 @@ body.modal-open {
     align-items: center;
     gap: 10px;
     margin: 16px 0 4px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 10px);
     cursor: pointer;
     user-select: none;
     font-size: 14px;
     color: var(--text-primary);
+    transition: border-color var(--transition-fast, .15s ease);
+}
+
+.form-switch-row:hover {
+    border-color: var(--accent-primary);
+}
+
+.form-switch-row:has(input[type="checkbox"]:checked) {
+    border-color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.1);
+}
+
+.form-switch-row i {
+    color: var(--accent-secondary);
+    font-size: 16px;
 }
 
 .form-switch-row input[type="checkbox"] {

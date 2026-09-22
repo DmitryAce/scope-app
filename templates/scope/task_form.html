@@ -81,8 +81,9 @@
             <label class="form-switch-row">
                 <input type="hidden" name="auto_complete" value="0">
                 <input type="checkbox" name="auto_complete" value="1" {% if task.auto_complete %}checked{% endif %}>
+                <i class="ri-timer-flash-line"></i>
                 <span>Закрывать в конце дня</span>
-                <span class="form-switch-hint">задача не повиснет в просрочке</span>
+                <span class="form-switch-hint">не повиснет в просрочке</span>
             </label>
 
             {% if tags %}
