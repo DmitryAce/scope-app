@@ -10,10 +10,10 @@ SESSION_KEY = 'autoclose_done_for'
 
 
 class AutoCompleteMiddleware:
-    """Закрывает задачи с ``auto_complete``, чей день прошёл — раз в день на сессию.
+    """Раз в день на сессию: закрыть вчерашнее и досоздать повторяющиеся задачи.
 
     Дешевле крона и не зависит от него: первая же страница после полуночи разгребает
-    вчерашние пары и встречи, чтобы они не копились в просрочке.
+    вчерашние пары и встречи и подливает вперёд повторы по правилам.
     """
 
     def __init__(self, get_response):
@@ -25,5 +25,6 @@ class AutoCompleteMiddleware:
             today = timezone.localdate().isoformat()
             if request.session.get(SESSION_KEY) != today:
                 Task.autoclose_past(user)
+                Task.spawn_all_repeats(user)
                 request.session[SESSION_KEY] = today
         return self.get_response(request)

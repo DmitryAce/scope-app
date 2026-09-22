@@ -53,6 +53,23 @@
         </div>
     </div>
 
+
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-label">Длительность, мин</label>
+            <input type="number" name="duration_minutes" class="form-input" min="5" max="1440" step="5"
+                   placeholder="например 120" value="{{ task.duration_minutes|default_if_none:'' }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Повтор</label>
+            <select name="repeat" class="form-input">
+                {% for key, label in task.REPEAT_CHOICES %}
+                <option value="{{ key }}" {% if task.repeat == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
     <label class="form-switch-row">
         <input type="hidden" name="auto_complete" value="0">
         <input type="checkbox" name="auto_complete" value="1" {% if task.auto_complete %}checked{% endif %}>

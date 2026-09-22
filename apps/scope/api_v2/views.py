@@ -50,6 +50,22 @@ def _parse_time_val(s):
     raise ValueError('due_time must be HH:MM or HH:MM:SS')
 
 
+_REPEAT_KEYS = {key for key, _ in Task.REPEAT_CHOICES if key}
+
+
+def _parse_duration(value):
+    """Длительность задачи в минутах: число, пусто или None."""
+    if value in (None, ''):
+        return None
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        raise ValueError('duration_minutes должен быть числом минут')
+    if minutes <= 0 or minutes > 24 * 60:
+        raise ValueError('duration_minutes: от 1 до 1440')
+    return minutes
+
+
 def _parse_reminder(s):
     """Время персонального напоминания: 'YYYY-MM-DD HH:MM' (локальное) или пусто."""
     if s is None or s == '':
@@ -250,6 +266,22 @@ def tasks_collection(request):
     except ValueError as e:
         return _json_error('validation_error', str(e))
 
+    try:
+        duration_val = _parse_duration(data.get('duration_minutes'))
+    except ValueError as e:
+        return _json_error('validation_error', str(e))
+
+    repeat_val = str(data.get('repeat') or '')
+    if repeat_val and repeat_val not in _REPEAT_KEYS:
+        return _json_error('validation_error', f'repeat: допустимо {sorted(_REPEAT_KEYS)}')
+
+    repeat_until_val = None
+    if data.get('repeat_until'):
+        try:
+            repeat_until_val = _parse_date(data['repeat_until'])
+        except ValueError as e:
+            return _json_error('validation_error', str(e))
+
     order_val = 0
     if due_date:
         max_o = Task.objects.filter(user=user, due_date=due_date).aggregate(m=Max('order'))['m']
@@ -265,6 +297,9 @@ def tasks_collection(request):
         due_time=due_time_val,
         auto_complete=bool(data.get('auto_complete', False)),
         reminder=reminder_val,
+        duration_minutes=duration_val,
+        repeat=repeat_val,
+        repeat_until=repeat_until_val,
         order=order_val,
     )
     tag_ids = data.get('tag_ids') or data.get('tags')
@@ -282,6 +317,7 @@ def tasks_collection(request):
             return _json_error('validation_error', 'Не все теги найдены или принадлежат вам')
         task.tags.set(uniq)
 
+    task.spawn_repeats()
     task.refresh_from_db()
     return JsonResponse({'data': task_to_dict(task)}, status=201)
 
@@ -333,6 +369,28 @@ def task_detail(request, pk: int):
             task.reminder = _parse_reminder(data['reminder'])
         except ValueError as e:
             return _json_error('validation_error', str(e))
+
+    if 'duration_minutes' in data:
+        try:
+            task.duration_minutes = _parse_duration(data['duration_minutes'])
+        except ValueError as e:
+            return _json_error('validation_error', str(e))
+
+    if 'repeat' in data:
+        value = str(data.get('repeat') or '')
+        if value and value not in _REPEAT_KEYS:
+            return _json_error('validation_error', f'repeat: допустимо {sorted(_REPEAT_KEYS)}')
+        task.repeat = value
+
+    if 'repeat_until' in data:
+        raw = data['repeat_until']
+        if raw in (None, ''):
+            task.repeat_until = None
+        else:
+            try:
+                task.repeat_until = _parse_date(raw)
+            except ValueError as e:
+                return _json_error('validation_error', str(e))
 
     if 'project_id' in data:
         pid = data['project_id']
@@ -394,6 +452,7 @@ def task_detail(request, pk: int):
             task.tags.set(uniq)
 
     task.save()
+    task.spawn_repeats()
     task.refresh_from_db()
     return JsonResponse({'data': task_to_dict(task)})
 

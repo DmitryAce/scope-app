@@ -561,12 +561,16 @@ def task_create(request):
             due_time=due_time if due_time else None,
             auto_complete=_post_flag(request.POST, 'auto_complete'),
             reminder=_parse_reminder_post(request.POST.get('reminder')),
+            duration_minutes=_post_duration(request.POST.get('duration_minutes')),
+            repeat=_post_repeat(request.POST),
             user=request.user,
             order=order_val,
         )
         
         if tag_ids:
             task.tags.set(tag_ids)
+
+        task.spawn_repeats()
 
         for text in request.POST.getlist('checklist_items'):
             text = (text or '').strip()
@@ -704,6 +708,24 @@ def _parse_reminder_post(raw):
     return None
 
 
+def _post_duration(raw):
+    """Длительность в минутах из формы: пусто — значит не задана."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        minutes = int(raw)
+    except ValueError:
+        return None
+    return minutes if 0 < minutes <= 24 * 60 else None
+
+
+def _post_repeat(post):
+    value = (post.get('repeat') or '').strip()
+    allowed = {key for key, _ in Task.REPEAT_CHOICES if key}
+    return value if value in allowed else ''
+
+
 def _post_flag(post, name):
     """Чекбокс из формы: рядом с ним идёт hidden-0, поэтому берём последнее значение."""
     values = post.getlist(name)
@@ -741,11 +763,19 @@ def _save_task_from_post(task, user, post):
     if 'reminder' in post:
         task.reminder = _parse_reminder_post(post.get('reminder'))
 
+    if 'duration_minutes' in post:
+        task.duration_minutes = _post_duration(post.get('duration_minutes'))
+
+    if 'repeat' in post:
+        task.repeat = _post_repeat(post)
+        task.repeat_until = datetime.strptime(post['repeat_until'], '%Y-%m-%d').date()             if post.get('repeat_until') else None
+
     tag_ids = post.getlist('tags')
     if tag_ids or 'tags' in post:
         task.tags.set(tag_ids)
 
     task.save()
+    task.spawn_repeats()
     return task
 
 
@@ -1223,6 +1253,8 @@ def api_kanban_events(request):
             'time': task.due_time.strftime('%H:%M') if task.due_time else None,
             'reminder': timezone.localtime(task.reminder).strftime('%Y-%m-%d %H:%M') if task.reminder else None,
             'summary': _event_summary(task),
+            'duration': task.duration_minutes,
+            'repeat': task.repeat,
             'priority': task.priority,
             'priority_class': priority_labels.get(task.priority, 'medium'),
             'completed': task.is_completed,

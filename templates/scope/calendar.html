@@ -363,8 +363,9 @@ class KanbanCalendar {
         return h * 60 + m;
     }
 
-    /** Пара идёт 1:30, прочее показываем часовым блоком. */
+    /** Длительность задачи: своя, если задана; пара — 1:30; иначе час. */
     eventDuration(task) {
+        if (task.duration) return Math.max(15, Number(task.duration));
         const tags = task.tags || [];
         return tags.some(t => (t.name || '').toLowerCase() === 'пары') ? 90 : 60;
     }
@@ -569,7 +570,7 @@ class KanbanCalendar {
                  data-task-id="${task.id}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
                  onclick="openTaskEditor(${task.id})">
-                <div class="tl-event-time">${task.time || ''}</div>
+                <div class="tl-event-time">${task.time || ''}${task.repeat ? ' <i class="ri-repeat-2-line tl-repeat"></i>' : ''}</div>
                 <div class="tl-event-title">${this.escapeHtml(this.shortTitle(task.title))}</div>
                 ${summary}
                 ${foot}

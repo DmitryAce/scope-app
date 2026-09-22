@@ -324,6 +324,11 @@ class BrowserWindow(QMainWindow):
         esc.setContext(Qt.ShortcutContext.ApplicationShortcut)
         esc.activated.connect(self._leave_fullscreen_if_needed)
 
+        # F5 — обычное обновление страницы, как в браузере.
+        refresh = QShortcut(QKeySequence(Qt.Key_F5), self)
+        refresh.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        refresh.activated.connect(self._reload)
+
         # Жёсткое обновление после деплоя: сброс HTTP-кэша Chromium + reload без кэша.
         for seq in (QKeySequence("Ctrl+F5"), QKeySequence("Ctrl+Shift+R")):
             hard = QShortcut(seq, self)
@@ -363,6 +368,11 @@ class BrowserWindow(QMainWindow):
             return
         print(f"Сертификат отклонён: {host} — {error.description()}", file=sys.stderr)
         error.rejectCertificate()
+
+    def _reload(self) -> None:
+        page = self.view.page()
+        if page is not None:
+            page.triggerAction(QWebEnginePage.WebAction.Reload)
 
     def _hard_reload(self) -> None:
         """Ctrl+F5: сброс кэша Chromium и перезагрузка в обход него.

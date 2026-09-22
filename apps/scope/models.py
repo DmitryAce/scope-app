@@ -70,7 +70,25 @@ class Task(models.Model):
     
     due_date = models.DateField(null=True, blank=True)
     due_time = models.TimeField(null=True, blank=True)
+    # Сколько задача занимает: календарь рисует блок этой высоты.
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
     reminder = models.DateTimeField(null=True, blank=True)
+
+    REPEAT_CHOICES = [
+        ('', 'Не повторять'),
+        ('daily', 'Каждый день'),
+        ('weekdays', 'По будням'),
+        ('weekly', 'Каждую неделю'),
+        ('biweekly', 'Раз в две недели'),
+        ('monthly', 'Каждый месяц'),
+    ]
+    repeat = models.CharField(max_length=10, choices=REPEAT_CHOICES, blank=True, default='')
+    repeat_until = models.DateField(null=True, blank=True)
+    # Повторы — обычные задачи, связанные с исходной: так они живут в календаре,
+    # напоминаниях и автозакрытии без отдельной ветки логики.
+    repeat_parent = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.CASCADE, related_name='repeat_children'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -105,6 +123,81 @@ class Task(models.Model):
             is_completed=False,
             due_date__lt=today,
         ).update(is_completed=True, completed_at=timezone.now())
+
+    # Горизонт, на который вперёд материализуются повторы.
+    REPEAT_HORIZON_DAYS = 70
+
+    def next_repeat_date(self, after):
+        """Следующая дата по правилу повтора после указанной."""
+        if self.repeat == 'daily':
+            return after + timedelta(days=1)
+        if self.repeat == 'weekdays':
+            d = after + timedelta(days=1)
+            while d.weekday() >= 5:
+                d += timedelta(days=1)
+            return d
+        if self.repeat == 'weekly':
+            return after + timedelta(days=7)
+        if self.repeat == 'biweekly':
+            return after + timedelta(days=14)
+        if self.repeat == 'monthly':
+            year = after.year + (after.month // 12)
+            month = after.month % 12 + 1
+            day = min(after.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                                  31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+            return date(year, month, day)
+        return None
+
+    def spawn_repeats(self, horizon=None):
+        """Создаёт недостающие повторы вперёд. Возвращает число созданных."""
+        if not self.repeat or self.repeat_parent_id or not self.due_date:
+            return 0
+
+        horizon = horizon or (timezone.localdate() + timedelta(days=self.REPEAT_HORIZON_DAYS))
+        if self.repeat_until and self.repeat_until < horizon:
+            horizon = self.repeat_until
+
+        existing = set(
+            Task.objects.filter(repeat_parent=self).values_list('due_date', flat=True)
+        )
+        existing.add(self.due_date)
+
+        cursor = max(existing)
+        created = 0
+        tag_ids = list(self.tags.values_list('id', flat=True))
+
+        while True:
+            cursor = self.next_repeat_date(cursor)
+            if cursor is None or cursor > horizon:
+                break
+            if cursor in existing:
+                continue
+            copy = Task.objects.create(
+                user=self.user,
+                project=self.project,
+                title=self.title,
+                description=self.description,
+                priority=self.priority,
+                due_date=cursor,
+                due_time=self.due_time,
+                duration_minutes=self.duration_minutes,
+                auto_complete=self.auto_complete,
+                repeat_parent=self,
+                order=self.order,
+            )
+            if tag_ids:
+                copy.tags.set(tag_ids)
+            existing.add(cursor)
+            created += 1
+        return created
+
+    @classmethod
+    def spawn_all_repeats(cls, user):
+        """Догенерировать повторы всех правил пользователя (мидлвара, команда)."""
+        total = 0
+        for task in cls.objects.filter(user=user, repeat_parent__isnull=True).exclude(repeat=''):
+            total += task.spawn_repeats()
+        return total
 
     @property
     def is_overdue(self):

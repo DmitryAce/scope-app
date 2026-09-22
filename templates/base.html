@@ -208,6 +208,23 @@
                             <input type="time" name="due_time" class="form-input">
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Длительность, мин</label>
+                            <input type="number" name="duration_minutes" class="form-input" min="5" max="1440" step="5" placeholder="например 120">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Повтор</label>
+                            <select name="repeat" class="form-input">
+                                <option value="">Не повторять</option>
+                                <option value="daily">Каждый день</option>
+                                <option value="weekdays">По будням</option>
+                                <option value="weekly">Каждую неделю</option>
+                                <option value="biweekly">Раз в две недели</option>
+                                <option value="monthly">Каждый месяц</option>
+                            </select>
+                        </div>
+                    </div>
                     <label class="form-switch-row">
                         <input type="hidden" name="auto_complete" value="0">
                         <input type="checkbox" name="auto_complete" value="1">

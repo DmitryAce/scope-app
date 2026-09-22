@@ -2234,6 +2234,11 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
     overflow-wrap: anywhere;
 }
 
+.tl-repeat {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
 .tl-event-summary {
     margin-top: 2px;
     font-size: 11px;
