@@ -61,6 +61,11 @@
         <span class="form-switch-hint">не повиснет в просрочке</span>
     </label>
 
+    <div class="form-group">
+        <label class="form-label">Напомнить</label>
+        <input type="datetime-local" name="reminder" class="form-input" value='{% if task.reminder %}{{ task.reminder|date:"Y-m-d\TH:i" }}{% endif %}'>
+    </div>
+
     <div class="task-editor-section">
         <div class="task-editor-section-head">
             <span class="form-label task-editor-section-label"><i class="ri-checkbox-multiple-line"></i> Чек-лист</span>

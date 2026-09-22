@@ -237,22 +237,50 @@ class Reminders:
         for event in data.get("events") or []:
             if not isinstance(event, dict) or event.get("completed"):
                 continue
-            raw_time = event.get("time")
             task_id = event.get("id")
-            if not raw_time or task_id in self._notified:
-                continue
-            try:
-                start_at = datetime.combine(today, datetime.strptime(raw_time, "%H:%M").time())
-            except ValueError:
+            raw_time = event.get("time")
+            if task_id in self._notified:
                 continue
 
+            start_at = None
+            if raw_time:
+                try:
+                    start_at = datetime.combine(today, datetime.strptime(raw_time, "%H:%M").time())
+                except ValueError:
+                    start_at = None
+
+            # Личное время напоминания у задачи важнее общего интервала.
+            remind_at = None
+            raw_reminder = event.get("reminder")
+            if raw_reminder:
+                try:
+                    remind_at = datetime.strptime(str(raw_reminder).replace("T", " ")[:16], "%Y-%m-%d %H:%M")
+                except ValueError:
+                    remind_at = None
+
+            if remind_at is not None:
+                # Окно в час: если приложение было выключено дольше — не будим задним числом.
+                if not (timedelta(0) <= now - remind_at <= timedelta(hours=1)):
+                    continue
+                self._notified.add(task_id)
+                left = (start_at - now) / timedelta(minutes=1) if start_at else None
+                self._notify(event, left, raw_time)
+                continue
+
+            if start_at is None:
+                continue
             left = (start_at - now) / timedelta(minutes=1)
             if 0 < left <= lead:
                 self._notified.add(task_id)
-                self._notify(event, max(1, int(round(left))), raw_time)
+                self._notify(event, left, raw_time)
 
-    def _notify(self, event: dict, minutes_left: int, at: str) -> None:
-        title = f"Через {minutes_left} мин · {at}"
+    def _notify(self, event: dict, minutes_left, at) -> None:
+        if minutes_left is None:
+            title = "Напоминание"
+        elif minutes_left >= 90:
+            title = f"Через {int(round(minutes_left / 60))} ч · {at}"
+        else:
+            title = f"Через {max(1, int(round(minutes_left)))} мин · {at}"
         body = str(event.get("title") or "Задача")
         project = event.get("project")
         if project:

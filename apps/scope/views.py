@@ -560,6 +560,7 @@ def task_create(request):
             due_date=due_date if due_date else None,
             due_time=due_time if due_time else None,
             auto_complete=_post_flag(request.POST, 'auto_complete'),
+            reminder=_parse_reminder_post(request.POST.get('reminder')),
             user=request.user,
             order=order_val,
         )
@@ -642,6 +643,9 @@ def task_edit(request, pk):
         if 'auto_complete' in request.POST:
             task.auto_complete = _post_flag(request.POST, 'auto_complete')
 
+        if 'reminder' in request.POST:
+            task.reminder = _parse_reminder_post(request.POST.get('reminder'))
+
         tag_ids = request.POST.getlist('tags')
         task.tags.set(tag_ids)
 
@@ -686,6 +690,20 @@ def task_toggle(request, pk):
     })
 
 
+def _parse_reminder_post(raw):
+    """Поле datetime-local: 'YYYY-MM-DDTHH:MM' в локальной зоне или пусто."""
+    raw = (raw or '').strip().replace('T', ' ')
+    if not raw:
+        return None
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
+        try:
+            naive = datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+        return timezone.make_aware(naive, timezone.get_current_timezone())
+    return None
+
+
 def _post_flag(post, name):
     """Чекбокс из формы: рядом с ним идёт hidden-0, поэтому берём последнее значение."""
     values = post.getlist(name)
@@ -719,6 +737,9 @@ def _save_task_from_post(task, user, post):
 
     if 'auto_complete' in post:
         task.auto_complete = _post_flag(post, 'auto_complete')
+
+    if 'reminder' in post:
+        task.reminder = _parse_reminder_post(post.get('reminder'))
 
     tag_ids = post.getlist('tags')
     if tag_ids or 'tags' in post:
@@ -1052,6 +1073,7 @@ def api_calendar_events(request):
             'description': task.description[:100] if task.description else '',
             'start': task.due_date.isoformat(),
             'time': task.due_time.strftime('%H:%M') if task.due_time else None,
+            'reminder': timezone.localtime(task.reminder).strftime('%Y-%m-%d %H:%M') if task.reminder else None,
             'color': color,
             'priority': task.priority,
             'completed': task.is_completed,
@@ -1181,6 +1203,7 @@ def api_kanban_events(request):
             'title': task.title,
             'start': task.due_date.isoformat(),
             'time': task.due_time.strftime('%H:%M') if task.due_time else None,
+            'reminder': timezone.localtime(task.reminder).strftime('%Y-%m-%d %H:%M') if task.reminder else None,
             'priority': task.priority,
             'priority_class': priority_labels.get(task.priority, 'medium'),
             'completed': task.is_completed,

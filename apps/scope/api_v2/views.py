@@ -5,6 +5,7 @@ from datetime import datetime
 
 from django.db.models import Max
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.scope.models import Project, Tag, Task
@@ -47,6 +48,22 @@ def _parse_time_val(s):
         except ValueError:
             continue
     raise ValueError('due_time must be HH:MM or HH:MM:SS')
+
+
+def _parse_reminder(s):
+    """Время персонального напоминания: 'YYYY-MM-DD HH:MM' (локальное) или пусто."""
+    if s is None or s == '':
+        return None
+    if not isinstance(s, str):
+        raise ValueError('reminder must be a string')
+    text = s.strip().replace('T', ' ')
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M'):
+        try:
+            naive = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        return timezone.make_aware(naive, timezone.get_current_timezone())
+    raise ValueError('reminder must be YYYY-MM-DD HH:MM')
 
 
 @v2
@@ -228,6 +245,11 @@ def tasks_collection(request):
         except ValueError as e:
             return _json_error('validation_error', str(e))
 
+    try:
+        reminder_val = _parse_reminder(data.get('reminder'))
+    except ValueError as e:
+        return _json_error('validation_error', str(e))
+
     order_val = 0
     if due_date:
         max_o = Task.objects.filter(user=user, due_date=due_date).aggregate(m=Max('order'))['m']
@@ -242,6 +264,7 @@ def tasks_collection(request):
         due_date=due_date,
         due_time=due_time_val,
         auto_complete=bool(data.get('auto_complete', False)),
+        reminder=reminder_val,
         order=order_val,
     )
     tag_ids = data.get('tag_ids') or data.get('tags')
@@ -304,6 +327,12 @@ def task_detail(request, pk: int):
 
     if 'auto_complete' in data:
         task.auto_complete = bool(data['auto_complete'])
+
+    if 'reminder' in data:
+        try:
+            task.reminder = _parse_reminder(data['reminder'])
+        except ValueError as e:
+            return _json_error('validation_error', str(e))
 
     if 'project_id' in data:
         pid = data['project_id']
