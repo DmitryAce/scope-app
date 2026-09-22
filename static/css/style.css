@@ -2945,6 +2945,11 @@ body.modal-open {
     min-width: 0;
 }
 
+/* Описание в модалке — сразу видно несколько строк, тянется вручную */
+.task-editor-form textarea[name="description"] {
+    min-height: 150px;
+}
+
 .task-editor-section {
     margin-top: 8px;
     padding-top: 12px;
