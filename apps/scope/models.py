@@ -64,6 +64,9 @@ class Task(models.Model):
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=2)
     is_completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # Закрывать саму себя, когда день прошёл: пары, встречи и прочее, что не должно
+    # висеть в просрочке, если его не отметили вручную.
+    auto_complete = models.BooleanField(default=False)
     
     due_date = models.DateField(null=True, blank=True)
     due_time = models.TimeField(null=True, blank=True)
@@ -88,6 +91,21 @@ class Task(models.Model):
             self.completed_at = None
         super().save(*args, **kwargs)
     
+    @classmethod
+    def autoclose_past(cls, user, today=None):
+        """Закрывает задачи с ``auto_complete``, день которых уже прошёл.
+
+        Вызывается при заходе в приложение (middleware) и командой ``scope_autoclose``.
+        Возвращает число закрытых задач.
+        """
+        today = today or timezone.localdate()
+        return cls.objects.filter(
+            user=user,
+            auto_complete=True,
+            is_completed=False,
+            due_date__lt=today,
+        ).update(is_completed=True, completed_at=timezone.now())
+
     @property
     def is_overdue(self):
         if self.due_date and not self.is_completed:

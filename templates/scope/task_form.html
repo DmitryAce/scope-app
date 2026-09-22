@@ -77,7 +77,14 @@
                            value="{{ task.due_time|time:'H:i'|default:'' }}">
                 </div>
             </div>
-            
+
+            <label class="form-switch-row">
+                <input type="hidden" name="auto_complete" value="0">
+                <input type="checkbox" name="auto_complete" value="1" {% if task.auto_complete %}checked{% endif %}>
+                <span>Закрывать в конце дня</span>
+                <span class="form-switch-hint">задача не повиснет в просрочке</span>
+            </label>
+
             {% if tags %}
             <div class="form-group">
                 <label class="form-label">Теги</label>

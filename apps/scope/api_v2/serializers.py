@@ -35,6 +35,7 @@ def task_to_dict(task: Task) -> dict:
         'priority': task.priority,
         'priority_label': task.get_priority_display(),
         'is_completed': task.is_completed,
+        'auto_complete': task.auto_complete,
         'completed_at': task.completed_at.isoformat() if task.completed_at else None,
         'due_date': task.due_date.isoformat() if task.due_date else None,
         'due_time': due_time,

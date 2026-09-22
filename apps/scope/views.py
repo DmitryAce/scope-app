@@ -559,6 +559,7 @@ def task_create(request):
             priority=int(priority),
             due_date=due_date if due_date else None,
             due_time=due_time if due_time else None,
+            auto_complete=_post_flag(request.POST, 'auto_complete'),
             user=request.user,
             order=order_val,
         )
@@ -638,6 +639,9 @@ def task_edit(request, pk):
         due_time = request.POST.get('due_time')
         task.due_time = due_time if due_time else None
 
+        if 'auto_complete' in request.POST:
+            task.auto_complete = _post_flag(request.POST, 'auto_complete')
+
         tag_ids = request.POST.getlist('tags')
         task.tags.set(tag_ids)
 
@@ -682,6 +686,12 @@ def task_toggle(request, pk):
     })
 
 
+def _post_flag(post, name):
+    """Чекбокс из формы: рядом с ним идёт hidden-0, поэтому берём последнее значение."""
+    values = post.getlist(name)
+    return bool(values) and str(values[-1]).lower() in ('1', 'true', 'on', 'yes')
+
+
 def _save_task_from_post(task, user, post):
     """Общая логика сохранения полей задачи из POST."""
     task.title = (post.get('title') or task.title).strip()
@@ -706,6 +716,9 @@ def _save_task_from_post(task, user, post):
 
     due_time = post.get('due_time')
     task.due_time = due_time if due_time else None
+
+    if 'auto_complete' in post:
+        task.auto_complete = _post_flag(post, 'auto_complete')
 
     tag_ids = post.getlist('tags')
     if tag_ids or 'tags' in post:

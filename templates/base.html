@@ -208,6 +208,12 @@
                             <input type="time" name="due_time" class="form-input">
                         </div>
                     </div>
+                    <label class="form-switch-row">
+                        <input type="hidden" name="auto_complete" value="0">
+                        <input type="checkbox" name="auto_complete" value="1">
+                        <span>Закрывать в конце дня</span>
+                        <span class="form-switch-hint">задача не повиснет в просрочке</span>
+                    </label>
                     <div class="form-group task-create-checklist-wrap">
                         <label class="form-label"><i class="ri-checkbox-multiple-line"></i> Чек-лист</label>
                         <div id="createChecklistDraft" class="checklist-draft-list"></div>

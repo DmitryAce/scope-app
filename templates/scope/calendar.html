@@ -4,24 +4,34 @@
 <div class="kanban-calendar" id="kanbanCalendarRoot">
     <div class="kanban-toolbar">
         <div class="kanban-nav">
-            <button class="btn-icon" onclick="kanbanCalendar.prevMonth()" title="Предыдущий месяц">
+            <button class="btn-icon" onclick="kanbanCalendar.prev()" id="kanbanPrevBtn" title="Назад">
                 <i class="ri-arrow-left-s-line"></i>
             </button>
             <h2 class="kanban-month-title" id="kanbanTitle">Загрузка...</h2>
-            <button class="btn-icon" onclick="kanbanCalendar.nextMonth()" title="Следующий месяц">
+            <button class="btn-icon" onclick="kanbanCalendar.next()" id="kanbanNextBtn" title="Вперёд">
                 <i class="ri-arrow-right-s-line"></i>
             </button>
         </div>
         <div class="kanban-actions">
+            <div class="kanban-view-switch">
+                <button class="btn btn-ghost btn-sm" id="kanbanViewMonthBtn" onclick="kanbanCalendar.setViewMode('month')">
+                    <i class="ri-calendar-2-line"></i> Месяц
+                </button>
+                <button class="btn btn-ghost btn-sm" id="kanbanViewWeekBtn" onclick="kanbanCalendar.setViewMode('week')">
+                    <i class="ri-calendar-event-line"></i> Неделя
+                </button>
+            </div>
             <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.goToToday()">
                 <i class="ri-focus-3-line"></i> Сегодня
             </button>
-            <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.expandAll()">
-                <i class="ri-expand-up-down-line"></i> Раскрыть все
-            </button>
-            <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.collapseAll()">
-                <i class="ri-collapse-diagonal-line"></i> Свернуть
-            </button>
+            <span id="kanbanExpandActions">
+                <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.expandAll()">
+                    <i class="ri-expand-up-down-line"></i> Раскрыть все
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="kanbanCalendar.collapseAll()">
+                    <i class="ri-collapse-diagonal-line"></i> Свернуть
+                </button>
+            </span>
         </div>
     </div>
 
@@ -40,6 +50,14 @@ class KanbanCalendar {
     constructor() {
         this._mountGen = window.__kanbanMountGen;
         this.currentDate = new Date();
+        // 'month' — весь месяц неделями-аккордеонами, 'week' — только одна неделя, крупно
+        this.viewMode = (() => {
+            try {
+                return localStorage.getItem('scopeCalendarView') === 'week' ? 'week' : 'month';
+            } catch (e) {
+                return 'month';
+            }
+        })();
         this.events = [];
         this.expandedWeeks = new Set();
         this.draggedTask = null;
@@ -94,6 +112,17 @@ class KanbanCalendar {
     }
 
     async loadEvents() {
+        if (this.viewMode === 'week') {
+            const ws = this.weekStart(this.currentDate);
+            const we = new Date(ws);
+            we.setDate(we.getDate() + 6);
+            await this.fetchEvents(
+                this.formatDateStr(ws.getFullYear(), ws.getMonth(), ws.getDate()),
+                this.formatDateStr(we.getFullYear(), we.getMonth(), we.getDate()),
+            );
+            return;
+        }
+
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
         const firstDay = new Date(y, m, 1);
@@ -106,9 +135,13 @@ class KanbanCalendar {
         const calEnd = new Date(calStart);
         calEnd.setDate(calEnd.getDate() + rows * 7 - 1);
 
-        const start = this.formatDateStr(calStart.getFullYear(), calStart.getMonth(), calStart.getDate());
-        const end = this.formatDateStr(calEnd.getFullYear(), calEnd.getMonth(), calEnd.getDate());
+        await this.fetchEvents(
+            this.formatDateStr(calStart.getFullYear(), calStart.getMonth(), calStart.getDate()),
+            this.formatDateStr(calEnd.getFullYear(), calEnd.getMonth(), calEnd.getDate()),
+        );
+    }
 
+    async fetchEvents(start, end) {
         try {
             const res = await fetch(`/api/kanban-events/?start=${start}&end=${end}`);
             if (this.isStale()) return;
@@ -119,7 +152,31 @@ class KanbanCalendar {
         }
     }
 
+    /** Понедельник недели, в которую попадает дата. */
+    weekStart(date) {
+        const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const shift = d.getDay() === 0 ? 6 : d.getDay() - 1;
+        d.setDate(d.getDate() - shift);
+        return d;
+    }
+
     getWeeks() {
+        if (this.viewMode === 'week') {
+            const cursor = this.weekStart(this.currentDate);
+            const m = this.currentDate.getMonth();
+            const days = [];
+            for (let d = 0; d < 7; d++) {
+                days.push({
+                    date: new Date(cursor),
+                    dateStr: this.formatDateStr(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()),
+                    isCurrentMonth: cursor.getMonth() === m,
+                    isToday: this.formatDateStr(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()) === this.getTodayStr(),
+                });
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            return [{ index: 0, days, startStr: days[0].dateStr, endStr: days[6].dateStr }];
+        }
+
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
         const firstDay = new Date(y, m, 1);
@@ -163,12 +220,22 @@ class KanbanCalendar {
         if (!titleEl || !container) return;
 
         const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+        const monthsGen = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
 
-        titleEl.textContent = `${months[m]} ${y}`;
-
         const weeks = this.getWeeks();
+
+        if (this.viewMode === 'week') {
+            const a = weeks[0].days[0].date;
+            const b = weeks[0].days[6].date;
+            const left = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${monthsGen[a.getMonth()]}`;
+            titleEl.textContent = `${left} — ${b.getDate()} ${monthsGen[b.getMonth()]} ${b.getFullYear()}`;
+        } else {
+            titleEl.textContent = `${months[m]} ${y}`;
+        }
+
+        this.syncViewChrome();
         const todayStr = this.getTodayStr();
 
         // По умолчанию все недели раскрыты (после смены месяца expandedWeeks пустой — снова всё раскрываем)
@@ -227,10 +294,11 @@ class KanbanCalendar {
                         return a.id - b.id;
                     });
                 const isPast = day.dateStr < todayStr && !day.isToday;
+                const isWeekend = dIdx >= 5;
                 const firstTaskId = dayEvents.length ? String(dayEvents[0].id) : '';
 
                 html += `
-                    <div class="kanban-day ${day.isToday ? 'today' : ''} ${!day.isCurrentMonth ? 'other-month' : ''} ${isPast ? 'past' : ''}"
+                    <div class="kanban-day ${day.isToday ? 'today' : ''} ${!day.isCurrentMonth ? 'other-month' : ''} ${isPast ? 'past' : ''} ${isWeekend ? 'weekend' : ''}"
                          data-date="${day.dateStr}"
                          ondragover="kanbanCalendar.onDragOverDay(event)"
                          ondragleave="kanbanCalendar.onDragLeaveDay(event)"
@@ -542,16 +610,63 @@ class KanbanCalendar {
         });
     }
 
-    prevMonth() {
-        this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+    /** Подсветить активный режим и спрятать то, что в нём не нужно. */
+    syncViewChrome() {
+        const root = document.getElementById('kanbanCalendarRoot');
+        if (root) root.classList.toggle('week-mode', this.viewMode === 'week');
+
+        const monthBtn = document.getElementById('kanbanViewMonthBtn');
+        const weekBtn = document.getElementById('kanbanViewWeekBtn');
+        if (monthBtn) monthBtn.classList.toggle('active', this.viewMode === 'month');
+        if (weekBtn) weekBtn.classList.toggle('active', this.viewMode === 'week');
+
+        const expand = document.getElementById('kanbanExpandActions');
+        if (expand) expand.hidden = this.viewMode === 'week';
+
+        const prev = document.getElementById('kanbanPrevBtn');
+        const next = document.getElementById('kanbanNextBtn');
+        const unit = this.viewMode === 'week' ? 'неделя' : 'месяц';
+        if (prev) prev.title = `Предыдущая ${unit === 'неделя' ? 'неделя' : 'месяц'}`;
+        if (next) next.title = `Следующая ${unit === 'неделя' ? 'неделя' : 'месяц'}`;
+    }
+
+    setViewMode(mode) {
+        const next = mode === 'week' ? 'week' : 'month';
+        if (next === this.viewMode) return;
+        this.viewMode = next;
+        try {
+            localStorage.setItem('scopeCalendarView', next);
+        } catch (e) { /* приватный режим — просто не запоминаем */ }
+        this.expandedWeeks.clear();
+        void this.init(next === 'month' ? 'instant' : undefined);
+    }
+
+    prev() {
+        if (this.viewMode === 'week') {
+            this.currentDate.setDate(this.currentDate.getDate() - 7);
+        } else {
+            this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+        }
         this.expandedWeeks.clear();
         void this.init();
     }
 
-    nextMonth() {
-        this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+    next() {
+        if (this.viewMode === 'week') {
+            this.currentDate.setDate(this.currentDate.getDate() + 7);
+        } else {
+            this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+        }
         this.expandedWeeks.clear();
         void this.init();
+    }
+
+    prevMonth() {
+        this.prev();
+    }
+
+    nextMonth() {
+        this.next();
     }
 
     goToToday() {

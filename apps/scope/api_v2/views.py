@@ -241,6 +241,7 @@ def tasks_collection(request):
         priority=priority,
         due_date=due_date,
         due_time=due_time_val,
+        auto_complete=bool(data.get('auto_complete', False)),
         order=order_val,
     )
     tag_ids = data.get('tag_ids') or data.get('tags')
@@ -300,6 +301,9 @@ def task_detail(request, pk: int):
 
     if 'is_completed' in data:
         task.is_completed = bool(data['is_completed'])
+
+    if 'auto_complete' in data:
+        task.auto_complete = bool(data['auto_complete'])
 
     if 'project_id' in data:
         pid = data['project_id']
