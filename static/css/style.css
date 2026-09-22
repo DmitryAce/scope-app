@@ -2213,7 +2213,19 @@ body.sidebar-collapsed .sidebar-collapse-btn .sidebar-collapse-icon-unfold {
 .tl-event:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     transform: translateY(-1px);
-    z-index: 3;
+    z-index: 20 !important;
+}
+
+/* Наложение: блоки лежат каскадом, поэтому нижним нужен край и тень */
+.tl-event.overlapped {
+    border-right: 1px solid var(--border-color);
+    box-shadow: -3px 0 8px rgba(0, 0, 0, 0.35);
+}
+
+.tl-overlap {
+    font-size: 10px;
+    opacity: 0.75;
+    margin-left: 2px;
 }
 
 .tl-event {

@@ -507,8 +507,12 @@ class KanbanCalendar {
             timed.forEach(task => {
                 const top = topOf(task._start);
                 const height = Math.max(34, ((task._end - task._start) / 60) * HOUR_PX - 3);
-                const width = 100 / task._cols;
-                blocks += this.renderTimelineEvent(task, top, height, task._col * width, width);
+                // Наложение — каскадом: каждый следующий блок сдвинут вправо и лежит
+                // поверх, но все остаются широкими и читаемыми.
+                const step = task._cols > 1 ? 34 / task._cols : 0;
+                const left = task._col * step;
+                const width = 100 - left;
+                blocks += this.renderTimelineEvent(task, top, height, left, width, task._col, task._cols);
             });
 
             let nowLine = '';
@@ -564,7 +568,7 @@ class KanbanCalendar {
         return `<span class="tl-project" style="color:${color}">${this.escapeHtml(task.project)}</span>`;
     }
 
-    renderTimelineEvent(task, top, height, left, width) {
+    renderTimelineEvent(task, top, height, left, width, layer = 0, layers = 1) {
         const place = this.placeOf(task);
         // Ниже этого подвал с проектом уже не помещается — прячем его.
         const compact = height < 58 ? ' compact' : '';
@@ -580,15 +584,15 @@ class KanbanCalendar {
             ? `<div class="tl-event-summary">${this.escapeHtml(task.summary)}</div>`
             : '';
         return `
-            <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}"
-                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); --tl-accent:${this.priorityColor(task)}"
+            <div class="tl-event ${task.completed ? 'completed' : ''} ${task.overdue ? 'overdue' : ''}${compact}${layers > 1 ? ' overlapped' : ''}"
+                 style="top:${top}px; height:${height}px; left:calc(${left}% + 2px); width:calc(${width}% - 4px); z-index:${1 + layer}; --tl-accent:${this.priorityColor(task)}"
                  draggable="true"
                  ondragstart="kanbanCalendar.onTimelineDragStart(event, ${task.id})"
                  ondragend="kanbanCalendar.onTimelineDragEnd(event)"
                  data-task-id="${task.id}"
                  title="${this.escapeHtml(task.title).replace(/"/g, '&quot;')}"
                  onclick="openTaskEditor(${task.id})">
-                <div class="tl-event-time">${task.time || ''}${task.repeat ? ' <i class="ri-repeat-2-line tl-repeat"></i>' : ''}</div>
+                <div class="tl-event-time">${task.time || ''}${task.repeat ? ' <i class="ri-repeat-2-line tl-repeat"></i>' : ''}${layers > 1 ? ` <i class="ri-stack-line tl-overlap" title="Параллельно ещё ${layers - 1}"></i>` : ''}</div>
                 <div class="tl-event-title">${this.escapeHtml(this.shortTitle(task.title))}</div>
                 ${summary}
                 ${foot}
