@@ -143,7 +143,7 @@ class CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           ...dayAgendaSlivers(context, selected, showDone: _showDone),
-          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          const SliverToBoxAdapter(child: SizedBox(height: 130)),
         ],
       ),
     );

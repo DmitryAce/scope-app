@@ -67,14 +67,13 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(28),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const ScopeLogo(size: 64),
-                const SizedBox(height: 28),
-                const Text('Scope',
-                    style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, letterSpacing: -1)),
-                const SizedBox(height: 4),
-                const Text('Задачи, расписание и проекты — в кармане.',
-                    style: TextStyle(fontSize: 16, color: C.text2)),
-                const SizedBox(height: 32),
+                const Center(child: ScopeLogo(size: 72)),
+                const SizedBox(height: 22),
+                const Center(
+                  child: Text('Scope',
+                      style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, letterSpacing: -1)),
+                ),
+                const SizedBox(height: 36),
                 TextField(
                   controller: _user,
                   autofillHints: const [AutofillHints.username],
@@ -136,11 +135,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTap: () => Navigator.push(
                         context, MaterialPageRoute(builder: (_) => const ServerSettingsScreen())),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Center(
-                  child: Text('Дома по Wi-Fi — напрямую, вне дома — через интернет',
-                      textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontSize: 12)),
                 ),
               ]),
             ),

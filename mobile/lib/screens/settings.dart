@@ -15,7 +15,7 @@ class SettingsScreen extends StatelessWidget {
     final store = StoreScope.of(context);
     return ListView(
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12, bottom: 40),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12, bottom: 130),
       children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 0, 20, 12),

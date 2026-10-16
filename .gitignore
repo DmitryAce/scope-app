@@ -50,3 +50,5 @@ browser_profile/
 # Собирается перед PyInstaller (`make icon`), не версионировать
 app/scope.ico
 app/webstead.ico
+# Собранный APK для телефона
+Scope.apk

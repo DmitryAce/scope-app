@@ -119,7 +119,7 @@ class _TodayScreenState extends State<TodayScreen> {
               itemBuilder: (_, i) => TaskTile(task: inbox[i]),
             ),
           ],
-          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          const SliverToBoxAdapter(child: SizedBox(height: 130)),
         ],
       ),
     );

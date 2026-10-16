@@ -108,7 +108,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 },
               ),
           ],
-          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          const SliverToBoxAdapter(child: SizedBox(height: 130)),
         ],
       ),
     );
@@ -330,7 +330,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
               if (_showDone)
                 for (final t in done.reversed.take(50)) TaskTile(task: t, showProject: false, showDate: true),
             ],
-            const SizedBox(height: 110),
+            const SizedBox(height: 130),
           ],
         ),
       ),
