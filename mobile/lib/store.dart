@@ -381,6 +381,43 @@ class AppStore extends ChangeNotifier {
     return t;
   }
 
+  // ---------- чек-лист ----------
+
+  Future<void> _checklistCall(Future<dynamic> Function() call) async {
+    try {
+      final t = Task.fromJson(await call());
+      _tasks[t.id] = t;
+      _changed();
+    } on ApiException catch (e) {
+      _fail(e);
+    }
+  }
+
+  Future<void> addChecklistItem(int taskId, String text) =>
+      _checklistCall(() => api.post('tasks/$taskId/checklist/', {'text': text}));
+
+  Future<void> toggleChecklistItem(Task t, ChecklistItem item) {
+    // Сразу на экране, сервер догонит.
+    _tasks[t.id] = Task.fromJson({
+      ...t.toJson(),
+      'checklist': [
+        for (final c in t.checklist)
+          c.id == item.id ? {...c.toJson(), 'is_completed': !c.isCompleted} : c.toJson(),
+      ],
+    });
+    notifyListeners();
+    return _checklistCall(() => api.patch('checklist/${item.id}/', {'is_completed': !item.isCompleted}));
+  }
+
+  Future<void> deleteChecklistItem(Task t, ChecklistItem item) {
+    _tasks[t.id] = Task.fromJson({
+      ...t.toJson(),
+      'checklist': [for (final c in t.checklist) if (c.id != item.id) c.toJson()],
+    });
+    notifyListeners();
+    return _checklistCall(() => api.delete('checklist/${item.id}/'));
+  }
+
   Future<void> deleteTask(Task t) async {
     _tasks.remove(t.id);
     _changed();
@@ -407,6 +444,9 @@ class AppStore extends ChangeNotifier {
       'tag_ids': t.tagIds,
     };
     final created = await createTask(body);
+    for (final c in t.checklist) {
+      await addChecklistItem(created.id, c.text);
+    }
     if (t.isCompleted) await toggle(created);
   }
 

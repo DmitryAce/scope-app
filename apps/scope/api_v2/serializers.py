@@ -51,7 +51,11 @@ def task_to_dict(task: Task) -> dict:
         'project_id': task.project_id,
         'order': task.order,
         'is_overdue': task.is_overdue,
-        'tag_ids': list(task.tags.values_list('id', flat=True)),
+        'tag_ids': [t.id for t in task.tags.all()],
+        'checklist': [
+            {'id': c.id, 'text': c.text, 'is_completed': c.is_completed}
+            for c in task.checklist_items.all()
+        ],
         'created_at': task.created_at.isoformat() if task.created_at else None,
         'updated_at': task.updated_at.isoformat() if task.updated_at else None,
     }

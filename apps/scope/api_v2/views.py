@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from apps.scope.models import ApiAccessToken, Project, Tag, Task
+from apps.scope.models import ApiAccessToken, ChecklistItem, Project, Tag, Task
 from apps.scope.api_v2.auth import v2
 from apps.scope.api_v2.serializers import project_to_dict, tag_to_dict, task_to_dict
 
@@ -230,7 +230,7 @@ def tags_collection(request):
 def tasks_collection(request):
     user = request.user
     if request.method == 'GET':
-        qs = Task.objects.filter(user=user).select_related('project').prefetch_related('tags')
+        qs = Task.objects.filter(user=user).select_related('project').prefetch_related('tags', 'checklist_items')
         if request.GET.get('project'):
             try:
                 qs = qs.filter(project_id=int(request.GET['project']))
@@ -595,3 +595,44 @@ def project_avatar(request, pk: int):
     if old and old != p.avatar.name:
         p.avatar.storage.delete(old)
     return JsonResponse({'data': project_to_dict(p)})
+
+
+@v2
+@require_http_methods(['POST'])
+def checklist_collection(request, pk: int):
+    """Добавить пункт чек-листа. Ответ — задача целиком, чтобы клиенту не склеивать."""
+    try:
+        task = Task.objects.get(pk=pk, user=request.user)
+    except Task.DoesNotExist:
+        return _json_error('not_found', 'Задача не найдена', 404)
+    data = _parse_body(request)
+    if data is None:
+        return _json_error('bad_json', 'Тело запроса не JSON', 400)
+    text = (data.get('text') or '').strip()
+    if not text:
+        return _json_error('validation_error', 'Поле text обязательно')
+    last = task.checklist_items.aggregate(m=Max('order'))['m']
+    ChecklistItem.objects.create(task=task, text=text[:500], order=(last if last is not None else -1) + 1)
+    return JsonResponse({'data': task_to_dict(task)}, status=201)
+
+
+@v2
+@require_http_methods(['PATCH', 'DELETE'])
+def checklist_item(request, pk: int):
+    try:
+        item = ChecklistItem.objects.select_related('task').get(pk=pk, task__user=request.user)
+    except ChecklistItem.DoesNotExist:
+        return _json_error('not_found', 'Пункт не найден', 404)
+    task = item.task
+    if request.method == 'DELETE':
+        item.delete()
+        return JsonResponse({'data': task_to_dict(task)})
+    data = _parse_body(request)
+    if data is None:
+        return _json_error('bad_json', 'Тело запроса не JSON', 400)
+    if 'text' in data and (data.get('text') or '').strip():
+        item.text = data['text'].strip()[:500]
+    if 'is_completed' in data:
+        item.is_completed = bool(data['is_completed'])
+    item.save()
+    return JsonResponse({'data': task_to_dict(task)})

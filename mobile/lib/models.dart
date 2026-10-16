@@ -85,6 +85,19 @@ class Tag {
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'color': color};
 }
 
+class ChecklistItem {
+  final int id;
+  final String text;
+  final bool isCompleted;
+
+  const ChecklistItem({required this.id, required this.text, this.isCompleted = false});
+
+  factory ChecklistItem.fromJson(Map<String, dynamic> j) =>
+      ChecklistItem(id: j['id'] as int, text: (j['text'] ?? '') as String, isCompleted: (j['is_completed'] ?? false) as bool);
+
+  Map<String, dynamic> toJson() => {'id': id, 'text': text, 'is_completed': isCompleted};
+}
+
 class Task {
   final int id;
   final String title;
@@ -101,6 +114,7 @@ class Task {
   final int? projectId;
   final int order;
   final List<int> tagIds;
+  final List<ChecklistItem> checklist;
 
   const Task({
     required this.id,
@@ -118,6 +132,7 @@ class Task {
     this.projectId,
     this.order = 0,
     this.tagIds = const [],
+    this.checklist = const [],
   });
 
   bool get isOverdue {
@@ -173,6 +188,7 @@ class Task {
         projectId: clearProject ? null : (projectId ?? this.projectId),
         order: order,
         tagIds: tagIds,
+        checklist: checklist,
       );
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -191,6 +207,9 @@ class Task {
         projectId: j['project_id'] as int?,
         order: (j['order'] ?? 0) as int,
         tagIds: ((j['tag_ids'] ?? const []) as List).cast<int>(),
+        checklist: ((j['checklist'] ?? const []) as List)
+            .map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -209,6 +228,7 @@ class Task {
         'project_id': projectId,
         'order': order,
         'tag_ids': tagIds,
+        'checklist': checklist.map((c) => c.toJson()).toList(),
       };
 }
 

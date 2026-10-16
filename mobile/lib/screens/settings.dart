@@ -130,7 +130,7 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Center(child: Text('Scope для Android · 1.1', style: TextStyle(color: C.muted, fontSize: 12))),
+        const Center(child: Text('Scope для Android · 1.2', style: TextStyle(color: C.muted, fontSize: 12))),
       ],
     );
   }

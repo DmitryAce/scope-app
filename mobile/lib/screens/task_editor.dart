@@ -1,0 +1,459 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+
+import '../models.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
+import '../widgets/task_draft.dart';
+import '../widgets/task_tile.dart';
+
+/// Задача на весь экран: название, заметка, чек-лист и поля списком.
+///
+/// Существующая задача сохраняется сама при выходе; новая — кнопкой «Создать».
+class TaskEditorScreen extends StatefulWidget {
+  const TaskEditorScreen({super.key, this.task, this.draft});
+
+  final Task? task;
+  final TaskDraft? draft;
+
+  @override
+  State<TaskEditorScreen> createState() => _TaskEditorScreenState();
+}
+
+class _TaskEditorScreenState extends State<TaskEditorScreen> {
+  late final TaskDraft d = widget.draft ?? TaskDraft.fromTask(widget.task);
+  late final _title = TextEditingController(text: d.title);
+  late final _desc = TextEditingController(text: d.description);
+  final _newItem = TextEditingController();
+  final _newItemFocus = FocusNode();
+  bool _dirty = false;
+  bool _saving = false;
+  bool _deleted = false;
+
+  bool get _isNew => widget.task == null;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _desc.dispose();
+    _newItem.dispose();
+    _newItemFocus.dispose();
+    super.dispose();
+  }
+
+  void _sync() {
+    if (d.title != _title.text || d.description != _desc.text) _dirty = true;
+    d.title = _title.text;
+    d.description = _desc.text;
+  }
+
+  Future<void> _pick(Future<bool> Function(BuildContext, TaskDraft) picker) async {
+    _sync();
+    if (await picker(context, d) && mounted) setState(() => _dirty = true);
+  }
+
+  /// Выход с экрана: существующую задачу молча сохраняем.
+  Future<void> _autosave() async {
+    _sync();
+    if (_isNew || _deleted || !_dirty || d.title.trim().isEmpty) return;
+    final store = StoreScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await store.updateTask(widget.task!.id, d.toBody(old: widget.task));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Не сохранилось: $e')));
+    }
+  }
+
+  Future<void> _create() async {
+    _sync();
+    if (d.title.trim().isEmpty) {
+      HapticFeedback.heavyImpact();
+      return;
+    }
+    setState(() => _saving = true);
+    final store = StoreScope.read(context);
+    try {
+      final t = await store.createTask(d.toBody());
+      for (final text in d.newChecklist) {
+        await store.addChecklistItem(t.id, text);
+      }
+      HapticFeedback.lightImpact();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showError(context, e);
+      }
+    }
+  }
+
+  Future<void> _delete() async {
+    final t = widget.task!;
+    final store = StoreScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    _deleted = true;
+    Navigator.pop(context);
+    await store.deleteTask(t);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('Удалено: ${t.title}', maxLines: 1, overflow: TextOverflow.ellipsis),
+        action: SnackBarAction(label: 'Вернуть', onPressed: () => store.restoreTask(t)),
+      ));
+  }
+
+  void _addItem() {
+    final text = _newItem.text.trim();
+    if (text.isEmpty) return;
+    _newItem.clear();
+    if (_isNew) {
+      setState(() => d.newChecklist.add(text));
+    } else {
+      StoreScope.read(context).addChecklistItem(widget.task!.id, text);
+    }
+    _newItemFocus.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final live = _isNew ? null : (store.taskById(widget.task!.id) ?? widget.task!);
+    final project = store.projectById(d.projectId);
+    final tagNames = d.tags.map((id) => store.tagById(id)?.name).whereType<String>().join(', ');
+
+    final checklist = live?.checklist ?? const <ChecklistItem>[];
+    final itemsDone = checklist.where((c) => c.isCompleted).length;
+    final itemCount = _isNew ? d.newChecklist.length : checklist.length;
+
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _autosave();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: () => Navigator.maybePop(context),
+            icon: Icon(_isNew ? PhosphorIconsRegular.x : PhosphorIconsRegular.caretLeft),
+          ),
+          title: Text(_isNew ? 'Новая задача' : '',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          actions: [
+            if (_isNew)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: C.accent, visualDensity: VisualDensity.compact),
+                  onPressed: _saving ? null : _create,
+                  child: const Text('Создать', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              )
+            else
+              PopupMenuButton<String>(
+                icon: const Icon(PhosphorIconsRegular.dotsThreeVertical),
+                onSelected: (v) {
+                  if (v == 'delete') _delete();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(PhosphorIconsRegular.trash, color: C.urgent, size: 20),
+                      SizedBox(width: 12),
+                      Text('Удалить', style: TextStyle(color: C.urgent)),
+                    ]),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.only(bottom: 40),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 20, 0),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (live != null)
+                  Padding(padding: const EdgeInsets.only(top: 4), child: CheckCircle(task: live, size: 24))
+                else
+                  const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _title,
+                    autofocus: _isNew && d.title.isEmpty,
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => _dirty = true,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      height: 1.3,
+                      color: live?.isCompleted == true ? C.text2 : C.text,
+                    ),
+                    decoration: _bare('Что нужно сделать?'),
+                  ),
+                ),
+              ]),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(live != null ? 52 : 20, 0, 20, 4),
+              child: TextField(
+                controller: _desc,
+                minLines: 1,
+                maxLines: null,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => _dirty = true,
+                style: const TextStyle(fontSize: 15, color: C.text2, height: 1.45),
+                decoration: _bare('Заметка'),
+              ),
+            ),
+
+            // ---- чек-лист ----
+            SectionHeader(
+              'Чек-лист',
+              count: itemCount == 0 ? null : itemCount,
+              trailing: !_isNew && itemCount > 0
+                  ? Text('$itemsDone из $itemCount',
+                      style: const TextStyle(color: C.muted, fontWeight: FontWeight.w700, fontSize: 13))
+                  : null,
+            ),
+            Group(children: [
+              if (_isNew)
+                for (var i = 0; i < d.newChecklist.length; i++)
+                  _ItemRow(
+                    text: d.newChecklist[i],
+                    done: false,
+                    onToggle: null,
+                    onDelete: () => setState(() => d.newChecklist.removeAt(i)),
+                  )
+              else
+                for (final c in checklist)
+                  _ItemRow(
+                    text: c.text,
+                    done: c.isCompleted,
+                    onToggle: () {
+                      HapticFeedback.selectionClick();
+                      store.toggleChecklistItem(live!, c);
+                    },
+                    onDelete: () => store.deleteChecklistItem(live!, c),
+                  ),
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 8),
+                child: Row(children: [
+                  const Icon(PhosphorIconsRegular.plus, size: 18, color: C.muted),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: TextField(
+                      controller: _newItem,
+                      focusNode: _newItemFocus,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) => _addItem(),
+                      decoration: _bare('Добавить пункт').copyWith(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ]),
+
+            // ---- поля ----
+            const SectionHeader('Детали'),
+            Group(children: [
+              _Field(
+                icon: PhosphorIconsRegular.calendarBlank,
+                label: 'Дата',
+                value: d.dateLabel(),
+                valueColor: d.date != null && d.date!.isBefore(dayOnly(DateTime.now())) ? C.urgent : null,
+                onTap: () => _pick(Pick.day),
+              ),
+              _Field(
+                icon: PhosphorIconsRegular.clock,
+                label: 'Время',
+                value: d.timeStr,
+                onTap: () => _pick(Pick.time),
+                onClear: d.time == null
+                    ? null
+                    : () => setState(() {
+                          d.time = null;
+                          _dirty = true;
+                        }),
+              ),
+              _Field(
+                icon: PhosphorIconsRegular.timer,
+                label: 'Длительность',
+                value: d.duration == null ? null : fmtDuration(d.duration!),
+                onTap: () => _pick(Pick.duration),
+              ),
+              _Field(
+                icon: PhosphorIconsRegular.repeat,
+                label: 'Повтор',
+                value: d.repeat.isEmpty ? null : repeatLabels[d.repeat],
+                onTap: () => _pick(Pick.repeat),
+              ),
+              _Field(
+                icon: PhosphorIconsRegular.bellSimple,
+                label: 'Напомнить',
+                value: d.reminder == null ? null : d.reminderLabel(),
+                onTap: () => _pick(Pick.reminder),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Group(children: [
+              _Field(
+                icon: PhosphorIconsRegular.folderSimple,
+                label: 'Проект',
+                value: project?.name,
+                trailingLead: project == null ? null : ProjectAvatar(project: project, size: 22),
+                onTap: () => _pick(Pick.project),
+              ),
+              _Field(
+                icon: PhosphorIconsRegular.flag,
+                label: 'Приоритет',
+                value: priorityLabels[d.priority],
+                valueColor: d.priority == 2 ? null : C.priority(d.priority),
+                onTap: () => _pick(Pick.priority),
+              ),
+              _Field(
+                icon: PhosphorIconsRegular.hash,
+                label: 'Теги',
+                value: tagNames.isEmpty ? null : tagNames,
+                onTap: () => _pick(Pick.tags),
+              ),
+              SwitchListTile(
+                contentPadding: const EdgeInsets.only(left: 16, right: 10),
+                secondary: const Icon(PhosphorIconsRegular.moonStars, size: 21, color: C.text2),
+                title: const Text('Закрыть, когда день пройдёт',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                value: d.autoComplete,
+                activeTrackColor: C.accent,
+                onChanged: (v) => setState(() {
+                  d.autoComplete = v;
+                  _dirty = true;
+                }),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+InputDecoration _bare(String hint) => InputDecoration(
+      hintText: hint,
+      filled: false,
+      isDense: true,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+    );
+
+/// Строка поля: иконка, название, значение справа.
+class _Field extends StatelessWidget {
+  const _Field({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.value,
+    this.valueColor,
+    this.trailingLead,
+    this.onClear,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? value;
+  final Color? valueColor;
+  final Widget? trailingLead;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onClear,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        child: Row(children: [
+          Icon(icon, size: 21, color: C.text2),
+          const SizedBox(width: 18),
+          Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              if (trailingLead != null) ...[trailingLead!, const SizedBox(width: 8)],
+              Flexible(
+                child: Text(
+                  value ?? 'Нет',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: value == null ? C.muted : (valueColor ?? C.text2),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 6),
+          const Icon(PhosphorIconsBold.caretRight, size: 13, color: C.muted),
+        ]),
+      ),
+    );
+  }
+}
+
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({required this.text, required this.done, required this.onToggle, required this.onDelete});
+
+  final String text;
+  final bool done;
+  final VoidCallback? onToggle;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+        child: Row(children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: done ? C.accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: done ? C.accent : C.muted, width: 1.6),
+            ),
+            child: done ? const Icon(PhosphorIconsBold.check, size: 13, color: Colors.white) : null,
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: done ? C.muted : C.text,
+                  decoration: done ? TextDecoration.lineThrough : null,
+                  decorationColor: C.muted,
+                )),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onDelete,
+            icon: const Icon(PhosphorIconsRegular.x, size: 16, color: C.muted),
+          ),
+        ]),
+      ),
+    );
+  }
+}

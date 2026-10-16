@@ -80,3 +80,32 @@ class ProjectTreeAndAvatarTests(TestCase):
         self.assertTrue(data['avatar'].startswith('/media/project_avatars/'))
 
         self.assertIsNone(self.client.delete(url, **self.auth).json()['data']['avatar'])
+
+
+class ChecklistApiTests(TestCase):
+    def setUp(self):
+        from apps.scope.models import ApiAccessToken
+
+        user = User.objects.create_user('carol', password='x')
+        raw, _ = ApiAccessToken.issue(user)
+        self.auth = {'HTTP_AUTHORIZATION': f'Bearer {raw}'}
+
+    def _req(self, method, url, body=None):
+        return getattr(self.client, method)(url, json.dumps(body or {}), content_type='application/json', **self.auth)
+
+    def test_add_toggle_delete_items(self):
+        task = self._req('post', '/api/v2/tasks/', {'title': 'Сборы'}).json()['data']
+        self.assertEqual(task['checklist'], [])
+
+        task = self._req('post', f"/api/v2/tasks/{task['id']}/checklist/", {'text': 'Паспорт'}).json()['data']
+        task = self._req('post', f"/api/v2/tasks/{task['id']}/checklist/", {'text': 'Зарядка'}).json()['data']
+        self.assertEqual([c['text'] for c in task['checklist']], ['Паспорт', 'Зарядка'])
+
+        first = task['checklist'][0]['id']
+        task = self._req('patch', f'/api/v2/checklist/{first}/', {'is_completed': True}).json()['data']
+        self.assertTrue(task['checklist'][0]['is_completed'])
+
+        task = self._req('delete', f'/api/v2/checklist/{first}/').json()['data']
+        self.assertEqual([c['text'] for c in task['checklist']], ['Зарядка'])
+        listed = self.client.get('/api/v2/tasks/', **self.auth).json()['data'][0]
+        self.assertEqual(len(listed['checklist']), 1)

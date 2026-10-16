@@ -15,4 +15,6 @@ urlpatterns = [
     path('tasks/', v2.tasks_collection, name='api_v2_tasks'),
     path('tasks/<int:pk>/', v2.task_detail, name='api_v2_task_detail'),
     path('tasks/<int:pk>/toggle/', v2.task_toggle, name='api_v2_task_toggle'),
+    path('tasks/<int:pk>/checklist/', v2.checklist_collection, name='api_v2_checklist'),
+    path('checklist/<int:pk>/', v2.checklist_item, name='api_v2_checklist_item'),
 ]

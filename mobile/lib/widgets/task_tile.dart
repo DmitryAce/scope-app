@@ -65,6 +65,18 @@ class TaskTile extends StatelessWidget {
             style: metaStyle(done ? C.muted : tag.tint)),
       ));
     }
+    if (task.checklist.isNotEmpty) {
+      final doneItems = task.checklist.where((c) => c.isCompleted).length;
+      final all = doneItems == task.checklist.length;
+      parts.insert(
+        0,
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(PhosphorIconsBold.listChecks, size: 13, color: all ? C.low : C.muted),
+          const SizedBox(width: 3),
+          Text('$doneItems/${task.checklist.length}', style: metaStyle(all ? C.low : metaColor)),
+        ]),
+      );
+    }
     final flags = <IconData>[
       if (task.repeat.isNotEmpty) PhosphorIconsBold.repeat,
       if (task.reminder != null) PhosphorIconsBold.bellSimple,
