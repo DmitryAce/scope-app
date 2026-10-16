@@ -6,9 +6,10 @@ from datetime import datetime
 from django.db.models import Max
 from django.http import JsonResponse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from apps.scope.models import Project, Tag, Task
+from apps.scope.models import ApiAccessToken, Project, Tag, Task
 from apps.scope.api_v2.auth import v2
 from apps.scope.api_v2.serializers import project_to_dict, tag_to_dict, task_to_dict
 
@@ -468,3 +469,60 @@ def task_toggle(request, pk: int):
     task.is_completed = not task.is_completed
     task.save()
     return JsonResponse({'data': {'id': task.id, 'is_completed': task.is_completed}})
+
+
+# Вход из мобильного приложения: логин/пароль меняются на токен API v2.
+# Сервер торчит наружу, поэтому неудачные попытки с одного адреса ограничены.
+LOGIN_FAIL_LIMIT = 8
+LOGIN_FAIL_WINDOW = 10 * 60
+
+
+def _client_ip(request) -> str:
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    return (forwarded.split(',')[0].strip() if forwarded else '') or request.META.get('REMOTE_ADDR', '')
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def auth_login(request):
+    from django.contrib.auth import authenticate
+    from django.core.cache import cache
+
+    data = _parse_body(request)
+    if data is None:
+        return _json_error('bad_json', 'Тело запроса не JSON', 400)
+
+    key = f'scope_api_login_fail:{_client_ip(request)}'
+    fails = cache.get(key, 0)
+    if fails >= LOGIN_FAIL_LIMIT:
+        return _json_error('throttled', 'Слишком много попыток, подождите 10 минут', 429)
+
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    user = authenticate(request, username=username, password=password) if username and password else None
+    if user is None or not user.is_active:
+        cache.set(key, fails + 1, LOGIN_FAIL_WINDOW)
+        return _json_error('invalid_credentials', 'Неверный логин или пароль', 401)
+
+    cache.delete(key)
+    device = str(data.get('device') or 'mobile')[:60]
+    raw, _ = ApiAccessToken.issue(user, name=f'app: {device}')
+    return JsonResponse({'data': {'token': raw, 'user': {'id': user.id, 'username': user.username}}}, status=201)
+
+
+@v2
+@require_http_methods(['POST'])
+def auth_logout(request):
+    from apps.scope.api_v2.auth import _hash_raw_token, extract_raw_token
+
+    ApiAccessToken.objects.filter(key_hash=_hash_raw_token(extract_raw_token(request) or '')).update(is_active=False)
+    return JsonResponse({'data': {'logged_out': True}})
+
+
+@v2
+@require_http_methods(['POST'])
+def housekeeping(request):
+    """То же, что мидлвара делает раз в день для браузера: у API нет сессии."""
+    closed = Task.autoclose_past(request.user)
+    spawned = Task.spawn_all_repeats(request.user)
+    return JsonResponse({'data': {'closed': closed, 'spawned': spawned}})

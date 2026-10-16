@@ -98,6 +98,21 @@ Current user (from token).
 
 ---
 
+### `POST /auth/login/` (без токена)
+
+Вход из мобильного приложения. Body: `{"username", "password", "device"?}`.
+**Response:** `201`, `data`: `{ "token": "scope_…", "user": {id, username} }`. Ошибки: `401 invalid_credentials`, `429 throttled` (8 неудач за 10 минут с одного адреса).
+
+### `POST /auth/logout/`
+
+Отзывает токен, с которым пришёл запрос.
+
+### `POST /housekeeping/`
+
+Закрыть прошедшие `auto_complete`-задачи и досоздать повторы (то, что для браузера делает мидлвара раз в день). `data`: `{closed, spawned}`.
+
+---
+
 ### Projects
 
 #### `GET /projects/`

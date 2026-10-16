@@ -40,3 +40,6 @@ htmlcov/
 # Static collected (will be regenerated)
 staticfiles/
 
+
+# Мобильное приложение собирается отдельно (Flutter)
+mobile/
