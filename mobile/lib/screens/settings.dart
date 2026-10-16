@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
@@ -35,19 +36,19 @@ class SettingsScreen extends StatelessWidget {
               onPressed: store.syncing ? null : store.refresh,
               icon: store.syncing
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.sync_rounded),
+                  : const Icon(PhosphorIconsRegular.arrowsClockwise),
             ),
           ),
         ]),
         const SectionHeader('Сервер'),
         _Card(children: [
           ListTile(
-            leading: Icon(store.onLocal ? Icons.home_rounded : Icons.public_rounded,
+            leading: Icon(store.onLocal ? PhosphorIconsRegular.house : PhosphorIconsRegular.globeSimple,
                 color: store.onLocal ? C.low : C.medium),
             title: Text(store.onLocal ? 'Дома, напрямую' : 'Через интернет',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(store.activeBase ?? '—', style: const TextStyle(color: C.text2)),
-            trailing: const Icon(Icons.chevron_right_rounded, color: C.muted),
+            trailing: const Icon(PhosphorIconsBold.caretRight, color: C.muted),
             onTap: () => Navigator.push(
                 context, MaterialPageRoute(builder: (_) => const ServerSettingsScreen())),
           ),
@@ -57,7 +58,7 @@ class SettingsScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
             child: Row(children: const [
-              Icon(Icons.notifications_active_outlined, color: C.accent2),
+              Icon(PhosphorIconsRegular.bellSimple, color: C.accent2),
               SizedBox(width: 12),
               Expanded(
                 child: Text('Напоминать до задачи со временем',
@@ -83,7 +84,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.alarm_on_rounded, color: C.text2),
+            leading: const Icon(PhosphorIconsRegular.alarm, color: C.text2),
             title: const Text('Точное время уведомлений'),
             subtitle: const Text('Разрешить будильники, чтобы Android не откладывал напоминания',
                 style: TextStyle(color: C.text2, fontSize: 12)),
@@ -96,10 +97,10 @@ class SettingsScreen extends StatelessWidget {
         ]),
         const SectionHeader('Подсказки'),
         const _Card(children: [
-          _Hint(Icons.swipe_right_rounded, 'Свайп вправо по задаче', 'Отметить выполненной'),
-          _Hint(Icons.swipe_left_rounded, 'Свайп влево', 'Перенести на завтра'),
-          _Hint(Icons.touch_app_rounded, 'Долгое нажатие на проект', 'Цвет, архив, удаление'),
-          _Hint(Icons.refresh_rounded, 'Потянуть вниз', 'Синхронизировать и перевыбрать сервер'),
+          _Hint(PhosphorIconsRegular.handSwipeRight, 'Свайп вправо по задаче', 'Отметить выполненной'),
+          _Hint(PhosphorIconsRegular.handSwipeLeft, 'Свайп влево', 'Перенести на завтра'),
+          _Hint(PhosphorIconsRegular.handTap, 'Долгое нажатие на проект', 'Цвет, архив, удаление'),
+          _Hint(PhosphorIconsRegular.arrowDown, 'Потянуть вниз', 'Синхронизировать и перевыбрать сервер'),
         ]),
         const SizedBox(height: 20),
         Padding(
@@ -124,12 +125,12 @@ class SettingsScreen extends StatelessWidget {
               );
               if (ok == true) store.logout();
             },
-            icon: const Icon(Icons.logout_rounded),
+            icon: const Icon(PhosphorIconsRegular.signOut),
             label: const Text('Выйти', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ),
         const SizedBox(height: 16),
-        const Center(child: Text('Scope для Android · 1.0', style: TextStyle(color: C.muted, fontSize: 12))),
+        const Center(child: Text('Scope для Android · 1.1', style: TextStyle(color: C.muted, fontSize: 12))),
       ],
     );
   }
@@ -171,7 +172,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             border: Border.all(color: (store.onLocal ? C.low : C.medium).withValues(alpha: 0.3)),
           ),
           child: Row(children: [
-            Icon(store.onLocal ? Icons.home_rounded : Icons.public_rounded,
+            Icon(store.onLocal ? PhosphorIconsRegular.house : PhosphorIconsRegular.globeSimple,
                 color: store.onLocal ? C.low : C.medium, size: 30),
             const SizedBox(width: 14),
             Expanded(
@@ -192,9 +193,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
         const SizedBox(height: 18),
         SegmentedButton<BackendMode>(
           segments: const [
-            ButtonSegment(value: BackendMode.auto, label: Text('Авто'), icon: Icon(Icons.auto_awesome_rounded)),
-            ButtonSegment(value: BackendMode.local, label: Text('Дом'), icon: Icon(Icons.home_rounded)),
-            ButtonSegment(value: BackendMode.remote, label: Text('Интернет'), icon: Icon(Icons.public_rounded)),
+            ButtonSegment(value: BackendMode.auto, label: Text('Авто'), icon: Icon(PhosphorIconsRegular.magicWand)),
+            ButtonSegment(value: BackendMode.local, label: Text('Дом'), icon: Icon(PhosphorIconsRegular.house)),
+            ButtonSegment(value: BackendMode.remote, label: Text('Интернет'), icon: Icon(PhosphorIconsRegular.globeSimple)),
           ],
           selected: {store.mode},
           onSelectionChanged: (s) => store.setMode(s.first),
@@ -220,7 +221,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             onPressed: _checking ? null : _check,
             icon: _checking
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.network_check_rounded),
+                : const Icon(PhosphorIconsRegular.wifiHigh),
             label: const Text('Сохранить и проверить'),
           ),
         ),

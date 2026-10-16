@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -25,6 +27,9 @@ Future<void> main() async {
   }
   final store = AppStore();
   await store.init();
+  // Картинки (аватарки проектов) грузит Image.network своим HttpClient —
+  // ему тоже нужно доверять самоподписанному сертификату домашнего сервера.
+  HttpOverrides.global = _HomeServerCerts(store);
   runApp(ScopeApp(store: store));
 }
 
@@ -65,4 +70,14 @@ class _Root extends StatelessWidget {
       child: store.loggedIn ? const HomeShell(key: ValueKey('home')) : const LoginScreen(key: ValueKey('login')),
     );
   }
+}
+
+class _HomeServerCerts extends HttpOverrides {
+  _HomeServerCerts(this.store);
+
+  final AppStore store;
+
+  @override
+  HttpClient createHttpClient(SecurityContext? context) => super.createHttpClient(context)
+    ..badCertificateCallback = (cert, host, port) => host == Uri.parse(store.localUrl).host;
 }

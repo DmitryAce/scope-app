@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
@@ -189,8 +190,8 @@ class _TaskSheetState extends State<TaskSheet> {
     final v = await _choose<int>(
       'Длительность',
       [
-        for (final m in [15, 30, 45, 60, 90, 120, 180, 240]) (m, fmtDuration(m), Icons.timelapse_rounded, null),
-        (0, 'Без длительности', Icons.block_rounded, null),
+        for (final m in [15, 30, 45, 60, 90, 120, 180, 240]) (m, fmtDuration(m), PhosphorIconsRegular.timer, null),
+        (0, 'Без длительности', PhosphorIconsRegular.prohibit, null),
       ],
       _duration ?? 0,
     );
@@ -200,7 +201,7 @@ class _TaskSheetState extends State<TaskSheet> {
   Future<void> _pickPriority() async {
     final v = await _choose<int>(
       'Приоритет',
-      [for (final p in [4, 3, 2, 1]) (p, priorityLabels[p]!, Icons.flag_rounded, C.priority(p))],
+      [for (final p in [4, 3, 2, 1]) (p, priorityLabels[p]!, PhosphorIconsFill.flag, C.priority(p))],
       _priority,
     );
     if (v != null) setState(() => _priority = v);
@@ -209,7 +210,7 @@ class _TaskSheetState extends State<TaskSheet> {
   Future<void> _pickRepeat() async {
     final v = await _choose<String>(
       'Повтор',
-      [for (final e in repeatLabels.entries) (e.key, e.value, Icons.repeat_rounded, null)],
+      [for (final e in repeatLabels.entries) (e.key, e.value, PhosphorIconsRegular.repeat, null)],
       _repeat,
     );
     if (v != null) {
@@ -222,13 +223,36 @@ class _TaskSheetState extends State<TaskSheet> {
 
   Future<void> _pickProject() async {
     final store = StoreScope.read(context);
-    final v = await _choose<int>(
-      'Проект',
-      [
-        (0, 'Без проекта', Icons.inbox_rounded, C.text2),
-        for (final p in store.projects) (p.id, p.name, Icons.folder_rounded, p.tint),
-      ],
-      _projectId ?? 0,
+    Widget row(BuildContext c, Project? p, {bool nested = false}) => ListTile(
+          contentPadding: EdgeInsets.only(left: nested ? 44 : 20, right: 20),
+          leading: ProjectAvatar(project: p, size: nested ? 28 : 34),
+          title: Text(p?.name ?? 'Без проекта', style: const TextStyle(fontWeight: FontWeight.w600)),
+          trailing: (p?.id ?? 0) == (_projectId ?? 0)
+              ? const Icon(PhosphorIconsBold.check, color: C.accent2, size: 18)
+              : null,
+          onTap: () => Navigator.pop(c, p?.id ?? 0),
+        );
+    final v = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(c).size.height * 0.75),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const _SheetTitle('Проект'),
+            Flexible(
+              child: ListView(shrinkWrap: true, children: [
+                row(c, null),
+                for (final p in store.rootProjects) ...[
+                  row(c, p),
+                  for (final ch in store.childrenOf(p.id)) row(c, ch, nested: true),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
     );
     if (v != null) setState(() => _projectId = v == 0 ? null : v);
   }
@@ -254,7 +278,7 @@ class _TaskSheetState extends State<TaskSheet> {
                     value: selected.contains(t.id),
                     activeColor: t.tint,
                     title: Text(t.name),
-                    secondary: Icon(Icons.tag_rounded, color: t.tint),
+                    secondary: Icon(PhosphorIconsRegular.hash, color: t.tint),
                     onChanged: (on) => set(() => on! ? selected.add(t.id) : selected.remove(t.id)),
                   ),
               ]),
@@ -291,7 +315,7 @@ class _TaskSheetState extends State<TaskSheet> {
                   ListTile(
                     leading: Icon(icon, color: color ?? C.accent2),
                     title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    trailing: value == current ? const Icon(Icons.check_rounded, color: C.accent2) : null,
+                    trailing: value == current ? const Icon(PhosphorIconsBold.check, color: C.accent2) : null,
                     onTap: () => Navigator.pop(c, value),
                   ),
               ]),
@@ -325,7 +349,7 @@ class _TaskSheetState extends State<TaskSheet> {
               IconButton(
                 tooltip: 'Удалить',
                 onPressed: _delete,
-                icon: const Icon(Icons.delete_outline_rounded, color: C.urgent),
+                icon: const Icon(PhosphorIconsRegular.trash, color: C.urgent),
               ),
             ],
           ]),
@@ -363,7 +387,7 @@ class _TaskSheetState extends State<TaskSheet> {
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       onPressed: () => setState(() => _showDesc = true),
-                      icon: const Icon(Icons.notes_rounded, size: 18),
+                      icon: const Icon(PhosphorIconsRegular.textAlignLeft, size: 18),
                       label: const Text('Описание'),
                     ),
                   ),
@@ -372,15 +396,15 @@ class _TaskSheetState extends State<TaskSheet> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
-              _DayChip('Сегодня', Icons.wb_sunny_rounded, _date == today, () => setState(() => _date = today)),
-              _DayChip('Завтра', Icons.wb_twilight_rounded, _date == tomorrow, () => setState(() => _date = tomorrow)),
+              _DayChip('Сегодня', PhosphorIconsFill.sun, _date == today, () => setState(() => _date = today)),
+              _DayChip('Завтра', PhosphorIconsRegular.sunHorizon, _date == tomorrow, () => setState(() => _date = tomorrow)),
               _DayChip(
                 _date != null && _date != today && _date != tomorrow ? fmtRelDay(_date!) : 'Дата',
-                Icons.calendar_month_rounded,
+                PhosphorIconsRegular.calendarBlank,
                 _date != null && _date != today && _date != tomorrow,
                 _pickDate,
               ),
-              _DayChip('Без даты', Icons.inbox_rounded, _date == null, () => setState(() {
+              _DayChip('Без даты', PhosphorIconsRegular.tray, _date == null, () => setState(() {
                     _date = null;
                     _time = null;
                     _repeat = '';
@@ -390,40 +414,41 @@ class _TaskSheetState extends State<TaskSheet> {
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
             _OptChip(
-              icon: Icons.schedule_rounded,
+              icon: PhosphorIconsRegular.clock,
               label: _timeStr ?? 'Время',
               active: _time != null,
               onTap: _pickTime,
               onClear: _time == null ? null : () => setState(() => _time = null),
             ),
             _OptChip(
-              icon: Icons.timelapse_rounded,
+              icon: PhosphorIconsRegular.timer,
               label: _duration == null ? 'Длительность' : fmtDuration(_duration!),
               active: _duration != null,
               onTap: _pickDuration,
             ),
             _OptChip(
-              icon: Icons.flag_rounded,
+              icon: PhosphorIconsFill.flag,
               label: priorityLabels[_priority]!,
               active: _priority != 2,
               color: C.priority(_priority),
               onTap: _pickPriority,
             ),
             _OptChip(
-              icon: project == null ? Icons.inbox_rounded : Icons.folder_rounded,
+              icon: PhosphorIconsRegular.folderSimple,
+              leading: project == null ? null : ProjectAvatar(project: project, size: 18),
               label: project?.name ?? 'Проект',
               active: project != null,
               color: project?.tint,
               onTap: _pickProject,
             ),
             _OptChip(
-              icon: Icons.repeat_rounded,
+              icon: PhosphorIconsRegular.repeat,
               label: _repeat.isEmpty ? 'Повтор' : repeatLabels[_repeat]!,
               active: _repeat.isNotEmpty,
               onTap: _pickRepeat,
             ),
             _OptChip(
-              icon: Icons.notifications_active_outlined,
+              icon: PhosphorIconsRegular.bellSimple,
               label: _reminder == null
                   ? 'Напомнить'
                   : '${fmtRelDay(_reminder!)}, ${_reminder!.hour.toString().padLeft(2, '0')}:${_reminder!.minute.toString().padLeft(2, '0')}',
@@ -432,7 +457,7 @@ class _TaskSheetState extends State<TaskSheet> {
               onClear: _reminder == null ? null : () => setState(() => _reminder = null),
             ),
             _OptChip(
-              icon: Icons.tag_rounded,
+              icon: PhosphorIconsRegular.hash,
               label: _tags.isEmpty
                   ? 'Теги'
                   : _tags.map((id) => store.tagById(id)?.name).whereType<String>().join(', '),
@@ -440,7 +465,7 @@ class _TaskSheetState extends State<TaskSheet> {
               onTap: _pickTags,
             ),
             _OptChip(
-              icon: Icons.auto_mode_rounded,
+              icon: PhosphorIconsRegular.moonStars,
               label: 'Закрыть, когда день пройдёт',
               active: _autoComplete,
               onTap: () => setState(() => _autoComplete = !_autoComplete),
@@ -453,8 +478,7 @@ class _TaskSheetState extends State<TaskSheet> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(colors: [C.accent, Color(0xFF9F5AF7)]),
-                boxShadow: [BoxShadow(color: C.accent.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 6))],
+                color: C.accent,
               ),
               child: TextButton(
                 onPressed: _saving ? null : _save,
@@ -489,7 +513,7 @@ class _DoneToggle extends StatelessWidget {
         HapticFeedback.lightImpact();
         StoreScope.read(context).toggle(task);
       },
-      icon: Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+      icon: Icon(done ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
           color: done ? C.low : C.text2, size: 20),
       label: Text(done ? 'Выполнено' : 'Не выполнено',
           style: TextStyle(color: done ? C.low : C.text2, fontWeight: FontWeight.w700)),
@@ -563,8 +587,10 @@ class _OptChip extends StatelessWidget {
     required this.onTap,
     this.color,
     this.onClear,
+    this.leading,
   });
 
+  final Widget? leading;
   final IconData icon;
   final String label;
   final bool active;
@@ -587,7 +613,7 @@ class _OptChip extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.fromLTRB(12, 8, onClear == null ? 12 : 4, 8),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 16, color: active ? c : C.text2),
+            leading ?? Icon(icon, size: 16, color: active ? c : C.text2),
             const SizedBox(width: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 220),
@@ -605,7 +631,7 @@ class _OptChip extends StatelessWidget {
                 onTap: onClear,
                 child: const Padding(
                   padding: EdgeInsets.only(left: 4),
-                  child: Icon(Icons.close_rounded, size: 16, color: C.text2),
+                  child: Icon(PhosphorIconsRegular.x, size: 16, color: C.text2),
                 ),
               ),
           ]),

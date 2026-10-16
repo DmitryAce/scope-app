@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../models.dart';
 import '../theme.dart';
@@ -40,43 +39,34 @@ class _TodayScreenState extends State<TodayScreen> {
             bottom: false,
             sliver: SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
-                child: Row(children: [
+                padding: const EdgeInsets.fromLTRB(22, 18, 10, 0),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(fmtLongDay(today),
-                          style: const TextStyle(color: C.text2, fontWeight: FontWeight.w600)),
+                      const Text('Сегодня',
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
                       const SizedBox(height: 2),
-                      Text(
-                        '${greeting()}${store.username != null ? ', ${store.username}' : ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5),
-                      ),
+                      Row(children: [
+                        Text(fmtLongDay(today),
+                            style: const TextStyle(color: C.text2, fontWeight: FontWeight.w600, fontSize: 14)),
+                        const SizedBox(width: 6),
+                        ConnectionPill(
+                          onTap: () => Navigator.push(
+                              context, MaterialPageRoute(builder: (_) => const ServerSettingsScreen())),
+                        ),
+                      ]),
                     ]),
                   ),
                   IconButton(
                     onPressed: () =>
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
-                    icon: const Icon(Icons.search_rounded),
+                    icon: const Icon(PhosphorIconsRegular.magnifyingGlass, size: 24),
                   ),
                 ]),
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ConnectionPill(
-                  onTap: () => Navigator.push(
-                      context, MaterialPageRoute(builder: (_) => const ServerSettingsScreen())),
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(child: _ProgressCard(day: today)),
+          SliverToBoxAdapter(child: _DaySummary(day: today)),
           if (overdue.isNotEmpty)
             SliverToBoxAdapter(
               child: ValueListenableBuilder<bool>(
@@ -86,26 +76,25 @@ class _TodayScreenState extends State<TodayScreen> {
                     'Просрочено',
                     count: overdue.length,
                     color: C.urgent,
+                    onTap: () => _showOverdue.value = !open,
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                       TextButton(
-                        onPressed: () => _moveAllToToday(context),
-                        child: const Text('Всё на сегодня'),
-                      ),
-                      IconButton(
-                        onPressed: () => _showOverdue.value = !open,
-                        icon: AnimatedRotation(
-                          turns: open ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 200),
-                          child: const Icon(Icons.expand_more_rounded, color: C.text2),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          textStyle: const TextStyle(fontFamily: 'Manrope', fontWeight: FontWeight.w700, fontSize: 13),
                         ),
+                        onPressed: () => _moveAllToToday(context),
+                        child: const Text('На сегодня'),
                       ),
+                      Caret(open: open),
                     ]),
                   ),
                   AnimatedSize(
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
                     child: open
-                        ? Column(children: [for (final t in overdue) TaskTile(task: t, showDate: true)])
+                        ? Group(children: [for (final t in overdue) TaskTile(task: t, showDate: true)])
                         : const SizedBox(width: double.infinity),
                   ),
                 ]),
@@ -113,10 +102,9 @@ class _TodayScreenState extends State<TodayScreen> {
             ),
           ...dayAgendaSlivers(context, today, showDone: _showDone),
           if (inbox.isNotEmpty) ...[
-            SliverToBoxAdapter(child: SectionHeader('Входящие · без даты', count: inbox.length)),
-            SliverList.builder(
-              itemCount: math.min(inbox.length, 8),
-              itemBuilder: (_, i) => TaskTile(task: inbox[i]),
+            SliverToBoxAdapter(child: SectionHeader('Без даты', count: inbox.length, color: C.text2)),
+            SliverToBoxAdapter(
+              child: Group(children: [for (final t in inbox.take(6)) TaskTile(task: t)]),
             ),
           ],
           const SliverToBoxAdapter(child: SizedBox(height: 130)),
@@ -138,9 +126,9 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 }
 
-/// Карточка дня: кольцо прогресса и ближайшая задача.
-class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({required this.day});
+/// Сводка дня одной строкой: сколько сделано и что дальше.
+class _DaySummary extends StatelessWidget {
+  const _DaySummary({required this.day});
 
   final DateTime day;
 
@@ -149,8 +137,9 @@ class _ProgressCard extends StatelessWidget {
     final store = StoreScope.of(context);
     final tasks = store.tasksOn(day);
     final total = tasks.length;
+    if (total == 0) return const SizedBox(height: 8);
     final done = tasks.where((t) => t.isCompleted).length;
-    final progress = total == 0 ? 0.0 : done / total;
+    final left = total - done;
 
     final now = DateTime.now();
     final nowMin = now.hour * 60 + now.minute;
@@ -162,84 +151,64 @@ class _ProgressCard extends StatelessWidget {
         break;
       }
     }
-    final busy = tasks
-        .where((t) => !t.isCompleted && t.durationMinutes != null)
-        .fold<int>(0, (s, t) => s + t.durationMinutes!);
 
-    String headline;
-    if (total == 0) {
-      headline = 'Свободный день';
-    } else if (done == total) {
-      headline = 'Всё сделано! 🎉';
-    } else {
-      headline = '$done из $total готово';
-    }
+    final title = left == 0
+        ? 'Всё сделано'
+        : '${_plural(left, 'Осталась', 'Осталось', 'Осталось')} $left ${_plural(left, 'задача', 'задачи', 'задач')}';
+    final subtitle = next != null
+        ? 'Дальше в ${next.dueTime}: ${next.title}'
+        : left == 0
+            ? 'Свободный вечер'
+            : 'Задач по времени больше нет';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 0),
       child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [C.accent.withValues(alpha: 0.32), C.logo.withValues(alpha: 0.22), C.bg2],
-            stops: const [0, 0.55, 1],
-          ),
-          border: Border.all(color: C.accent.withValues(alpha: 0.25)),
-        ),
+        padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+        decoration: BoxDecoration(color: C.bg2, borderRadius: BorderRadius.circular(18)),
         child: Row(children: [
           SizedBox(
-            width: 76,
-            height: 76,
+            width: 44,
+            height: 44,
             child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: progress),
-              duration: const Duration(milliseconds: 700),
+              tween: Tween(begin: 0, end: done / total),
+              duration: const Duration(milliseconds: 600),
               curve: Curves.easeOutCubic,
               builder: (_, v, __) => Stack(alignment: Alignment.center, children: [
                 SizedBox.expand(
                   child: CircularProgressIndicator(
                     value: v,
-                    strokeWidth: 8,
+                    strokeWidth: 4,
                     strokeCap: StrokeCap.round,
-                    backgroundColor: Colors.white.withValues(alpha: 0.08),
-                    color: done == total && total > 0 ? C.low : C.accent2,
+                    backgroundColor: C.bg3,
+                    color: left == 0 ? C.low : C.accent2,
                   ),
                 ),
-                Text('${(v * 100).round()}%',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                Text('$done/$total',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: C.text2)),
               ]),
             ),
           ),
-          const SizedBox(width: 18),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(headline, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
-              if (next != null)
-                Row(children: [
-                  const Icon(Icons.bolt_rounded, size: 16, color: C.high),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text('${next.dueTime} · ${next.title}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: C.text, fontWeight: FontWeight.w600)),
-                  ),
-                ])
-              else
-                Text(total == 0 ? 'Можно что-нибудь запланировать' : 'Ближайших задач по времени нет',
-                    style: const TextStyle(color: C.text2)),
-              if (busy > 0) ...[
-                const SizedBox(height: 4),
-                Text('Занято ещё ${fmtDuration(busy)}',
-                    style: const TextStyle(color: C.text2, fontSize: 12, fontWeight: FontWeight.w600)),
-              ],
+              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: C.text2, fontSize: 13, fontWeight: FontWeight.w500)),
             ]),
           ),
         ]),
       ),
     );
   }
+}
+
+String _plural(int n, String one, String few, String many) {
+  final m10 = n % 10, m100 = n % 100;
+  if (m10 == 1 && m100 != 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 }

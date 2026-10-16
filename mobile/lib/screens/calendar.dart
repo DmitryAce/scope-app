@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
@@ -95,7 +96,7 @@ class CalendarScreenState extends State<CalendarScreen> {
                     child: Row(children: [
                       Text(fmtMonth(shownMonth),
                           style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-                      const Icon(Icons.arrow_drop_down_rounded, color: C.text2),
+                      const Icon(PhosphorIconsBold.caretDown, color: C.text2),
                     ]),
                   ),
                   const Spacer(),
@@ -110,7 +111,7 @@ class CalendarScreenState extends State<CalendarScreen> {
                       _weeks = PageController(initialPage: _weekPageOf(selected));
                       _months = PageController(initialPage: _monthPageOf(selected));
                     }),
-                    icon: Icon(_month ? Icons.view_week_rounded : Icons.calendar_view_month_rounded),
+                    icon: Icon(_month ? PhosphorIconsRegular.rows : PhosphorIconsRegular.squaresFour),
                   ),
                 ]),
               ),
@@ -247,16 +248,8 @@ class _DayCell extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          gradient: isSel
-              ? const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [C.accent, Color(0xFF5B21B6)],
-                )
-              : null,
-          color: isSel ? null : C.bg2,
+          color: isSel ? C.accent : C.bg2,
           border: Border.all(color: isToday && !isSel ? C.accent2 : (isSel ? Colors.transparent : C.borderLight)),
-          boxShadow: isSel ? [BoxShadow(color: C.accent.withValues(alpha: 0.45), blurRadius: 14)] : null,
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text(fmtShortWeekday(day),

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
+import 'package:http_parser/http_parser.dart';
 
 /// Откуда ходить на сервер.
 enum BackendMode { auto, local, remote }
@@ -160,6 +161,32 @@ class ScopeApi {
       if (offset >= count || data.isEmpty || offset >= 3000) break;
     }
     return out;
+  }
+
+  /// Аватарка проекта: картинку уже уменьшил image_picker.
+  Future<dynamic> uploadAvatar(int projectId, List<int> bytes, String filename) async {
+    final base = await resolve();
+    final ext = filename.toLowerCase().split('.').last;
+    final type = switch (ext) { 'png' => 'png', 'webp' => 'webp', _ => 'jpeg' };
+    final req = http.MultipartRequest('POST', Uri.parse('$base/api/v2/projects/$projectId/avatar/'))
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes,
+          filename: 'avatar.$ext', contentType: MediaType('image', type)));
+    final res = await http.Response.fromStream(
+        await _http.send(req).timeout(const Duration(seconds: 30)));
+    final json = jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode >= 400) {
+      final err = json is Map ? json['error'] : null;
+      throw ApiException('${err?['code'] ?? 'http'}', '${err?['message'] ?? 'Ошибка ${res.statusCode}'}',
+          res.statusCode);
+    }
+    return json['data'];
+  }
+
+  /// Полный адрес картинки на текущем сервере.
+  String? mediaUrl(String? path) {
+    if (path == null || path.isEmpty || activeBase == null) return null;
+    return path.startsWith('http') ? path : '$activeBase$path';
   }
 
   Future<String> login(String username, String password) async {

@@ -289,11 +289,26 @@ class AppStore extends ChangeNotifier {
     return list;
   }
 
-  int openCount(int projectId) =>
-      _tasks.values.where((t) => t.projectId == projectId && !t.isCompleted).length;
+  /// Проекты верхнего уровня; подпроекты живут внутри родителя.
+  List<Project> get rootProjects => [for (final p in projects) if (p.parentId == null || projectById(p.parentId) == null) p];
 
-  int doneCount(int projectId) =>
-      _tasks.values.where((t) => t.projectId == projectId && t.isCompleted).length;
+  List<Project> childrenOf(int id) => [for (final p in projects) if (p.parentId == id) p];
+
+  Set<int> _family(int id) => {id, for (final c in childrenOf(id)) c.id};
+
+  /// Аватарка проекта, а если своей нет — родителя.
+  String? avatarUrl(Project p) =>
+      api.mediaUrl(p.avatar) ?? api.mediaUrl(projectById(p.parentId)?.avatar);
+
+  int openCount(int projectId, {bool withChildren = true}) {
+    final ids = withChildren ? _family(projectId) : {projectId};
+    return _tasks.values.where((t) => ids.contains(t.projectId) && !t.isCompleted).length;
+  }
+
+  int doneCount(int projectId, {bool withChildren = true}) {
+    final ids = withChildren ? _family(projectId) : {projectId};
+    return _tasks.values.where((t) => ids.contains(t.projectId) && t.isCompleted).length;
+  }
 
   /// Сколько задач на день и сколько из них сделано — для точек в календаре.
   (int, int) dayLoad(DateTime day) {
@@ -395,8 +410,8 @@ class AppStore extends ChangeNotifier {
     if (t.isCompleted) await toggle(created);
   }
 
-  Future<Project> createProject(String name, String color) async {
-    final j = await api.post('projects/', {'name': name, 'color': color});
+  Future<Project> createProject(String name, String color, {int? parentId}) async {
+    final j = await api.post('projects/', {'name': name, 'color': color, 'parent_id': parentId});
     final p = Project.fromJson(j);
     projects = [p, ...projects];
     _changed();
@@ -413,6 +428,14 @@ class AppStore extends ChangeNotifier {
     } else {
       projects = [p, ...projects];
     }
+    _changed();
+  }
+
+  Future<void> setAvatar(int id, List<int>? bytes, [String filename = 'a.jpg']) async {
+    final j = bytes == null ? await api.delete('projects/$id/avatar/') : await api.uploadAvatar(id, bytes, filename);
+    final p = Project.fromJson(j);
+    projects = [for (final x in projects) x.id == id ? p : x];
+    archivedProjects = [for (final x in archivedProjects) x.id == id ? p : x];
     _changed();
   }
 

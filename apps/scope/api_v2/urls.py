@@ -10,6 +10,7 @@ urlpatterns = [
     path('housekeeping/', v2.housekeeping, name='api_v2_housekeeping'),
     path('projects/', v2.projects_collection, name='api_v2_projects'),
     path('projects/<int:pk>/', v2.project_detail, name='api_v2_project_detail'),
+    path('projects/<int:pk>/avatar/', v2.project_avatar, name='api_v2_project_avatar'),
     path('tags/', v2.tags_collection, name='api_v2_tags'),
     path('tasks/', v2.tasks_collection, name='api_v2_tasks'),
     path('tasks/<int:pk>/', v2.task_detail, name='api_v2_task_detail'),

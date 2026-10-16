@@ -13,6 +13,9 @@ def project_to_dict(p: Project) -> dict:
         'color': p.color,
         'icon': p.icon,
         'is_archived': p.is_archived,
+        'parent_id': p.parent_id,
+        # Относительный путь: клиент сам подставляет сервер (дом или интернет).
+        'avatar': p.avatar.url if p.avatar else None,
         'created_at': p.created_at.isoformat() if p.created_at else None,
         'updated_at': p.updated_at.isoformat() if p.updated_at else None,
     }

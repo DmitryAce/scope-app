@@ -83,6 +83,32 @@ def _parse_reminder(s):
     raise ValueError('reminder must be YYYY-MM-DD HH:MM')
 
 
+def _resolve_parent(user, project, raw):
+    """Родитель проекта: только свой, без циклов и глубже одного уровня."""
+    if raw in (None, ''):
+        return None
+    try:
+        pid = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError('parent_id должен быть числом или null')
+    try:
+        parent = Project.objects.get(pk=pid, user=user)
+    except Project.DoesNotExist:
+        raise ValueError('Родительский проект не найден')
+    if project is not None:
+        if parent.pk == project.pk:
+            raise ValueError('Проект не может быть родителем сам себе')
+        if project.children.exists():
+            raise ValueError('У проекта есть подпроекты — его нельзя вложить')
+    if parent.parent_id:
+        raise ValueError('Подпроекты бывают только одного уровня')
+    return parent
+
+
+AVATAR_MAX_BYTES = 5 * 1024 * 1024
+AVATAR_TYPES = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}
+
+
 @v2
 @require_GET
 def root(request):
@@ -124,12 +150,17 @@ def projects_collection(request):
     name = (data.get('name') or '').strip()
     if not name:
         return _json_error('validation_error', 'Поле name обязательно')
+    try:
+        parent = _resolve_parent(user, None, data.get('parent_id'))
+    except ValueError as e:
+        return _json_error('validation_error', str(e))
     p = Project.objects.create(
         user=user,
         name=name[:200],
         description=(data.get('description') or '')[:5000],
         color=(data.get('color') or '#7C3AED')[:7],
         icon=(data.get('icon') or 'folder')[:50],
+        parent=parent,
     )
     return JsonResponse({'data': project_to_dict(p)}, status=201)
 
@@ -163,6 +194,11 @@ def project_detail(request, pk: int):
         p.icon = str(data['icon'])[:50]
     if 'is_archived' in data:
         p.is_archived = bool(data['is_archived'])
+    if 'parent_id' in data:
+        try:
+            p.parent = _resolve_parent(user, p, data['parent_id'])
+        except ValueError as e:
+            return _json_error('validation_error', str(e))
     p.save()
     return JsonResponse({'data': project_to_dict(p)})
 
@@ -526,3 +562,36 @@ def housekeeping(request):
     closed = Task.autoclose_past(request.user)
     spawned = Task.spawn_all_repeats(request.user)
     return JsonResponse({'data': {'closed': closed, 'spawned': spawned}})
+
+
+@v2
+@require_http_methods(['POST', 'DELETE'])
+def project_avatar(request, pk: int):
+    """POST multipart с полем file — поставить аватарку, DELETE — убрать."""
+    try:
+        p = Project.objects.get(pk=pk, user=request.user)
+    except Project.DoesNotExist:
+        return _json_error('not_found', 'Проект не найден', 404)
+
+    if request.method == 'DELETE':
+        if p.avatar:
+            p.avatar.delete(save=False)
+        p.avatar = ''
+        p.save(update_fields=['avatar', 'updated_at'])
+        return JsonResponse({'data': project_to_dict(p)})
+
+    upload = request.FILES.get('file')
+    if upload is None:
+        return _json_error('validation_error', 'Нужен файл в поле file')
+    ext = AVATAR_TYPES.get((upload.content_type or '').lower())
+    if ext is None:
+        return _json_error('validation_error', 'Аватарка: только JPEG, PNG или WebP')
+    if upload.size > AVATAR_MAX_BYTES:
+        return _json_error('validation_error', 'Аватарка больше 5 МБ')
+
+    old = p.avatar.name if p.avatar else None
+    p.avatar.save(f'project-{p.pk}-{timezone.now():%Y%m%d%H%M%S}.{ext}', upload, save=False)
+    p.save(update_fields=['avatar', 'updated_at'])
+    if old and old != p.avatar.name:
+        p.avatar.storage.delete(old)
+    return JsonResponse({'data': project_to_dict(p)})

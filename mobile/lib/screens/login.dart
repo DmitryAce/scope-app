@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -55,12 +56,12 @@ class _LoginScreenState extends State<LoginScreen> {
         Positioned(
           top: -140,
           left: -100,
-          child: _Glow(color: C.accent.withValues(alpha: 0.35), size: 380),
+          child: _Glow(color: C.accent.withValues(alpha: 0.16), size: 380),
         ),
         Positioned(
           bottom: -160,
           right: -120,
-          child: _Glow(color: C.logo.withValues(alpha: 0.35), size: 420),
+          child: _Glow(color: C.logo.withValues(alpha: 0.14), size: 420),
         ),
         SafeArea(
           child: Center(
@@ -80,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     hintText: 'Логин',
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: C.text2),
+                    prefixIcon: Icon(PhosphorIconsRegular.user, color: C.text2),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -91,10 +92,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   onSubmitted: (_) => _login(),
                   decoration: InputDecoration(
                     hintText: 'Пароль',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: C.text2),
+                    prefixIcon: const Icon(PhosphorIconsRegular.lockSimple, color: C.text2),
                     suffixIcon: IconButton(
                       onPressed: () => setState(() => _hide = !_hide),
-                      icon: Icon(_hide ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                      icon: Icon(_hide ? PhosphorIconsRegular.eye : PhosphorIconsRegular.eyeSlash,
                           color: C.text2),
                     ),
                   ),
@@ -106,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : Padding(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           child: Row(children: [
-                            const Icon(Icons.error_outline_rounded, color: C.urgent, size: 18),
+                            const Icon(PhosphorIconsRegular.warningCircle, color: C.urgent, size: 18),
                             const SizedBox(width: 8),
                             Expanded(child: Text(_error!, style: const TextStyle(color: C.urgent))),
                           ]),

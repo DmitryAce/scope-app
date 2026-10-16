@@ -28,6 +28,8 @@ class Project {
   final String color;
   final String icon;
   final bool isArchived;
+  final int? parentId;
+  final String? avatar; // путь /media/… на сервере
 
   const Project({
     required this.id,
@@ -36,6 +38,8 @@ class Project {
     this.color = '#7C3AED',
     this.icon = 'folder',
     this.isArchived = false,
+    this.parentId,
+    this.avatar,
   });
 
   Color get tint => parseHex(color);
@@ -47,6 +51,8 @@ class Project {
         color: (j['color'] ?? '#7C3AED') as String,
         icon: (j['icon'] ?? 'folder') as String,
         isArchived: (j['is_archived'] ?? false) as bool,
+        parentId: j['parent_id'] as int?,
+        avatar: j['avatar'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +62,8 @@ class Project {
         'color': color,
         'icon': icon,
         'is_archived': isArchived,
+        'parent_id': parentId,
+        'avatar': avatar,
       };
 }
 

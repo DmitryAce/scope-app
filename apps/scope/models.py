@@ -27,6 +27,13 @@ class Project(models.Model):
     color = models.CharField(max_length=7, default='#7C3AED')
     icon = models.CharField(max_length=50, default='folder')  # Название иконки
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects', null=True, blank=True)
+    # Один уровень вложенности: Webstead → клиенты/направления. Родителя удалили —
+    # подпроекты становятся обычными проектами, а не пропадают.
+    parent = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='children'
+    )
+    # Картинку уменьшает клиент перед загрузкой, поэтому хватает FileField без Pillow.
+    avatar = models.FileField(upload_to='project_avatars/', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_archived = models.BooleanField(default=False)

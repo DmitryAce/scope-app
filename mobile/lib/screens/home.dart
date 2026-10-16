@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 
 import '../theme.dart';
@@ -84,10 +85,10 @@ class ScopeNavBar extends StatelessWidget {
   final VoidCallback onAdd;
 
   static const _items = [
-    (Icons.wb_sunny_outlined, Icons.wb_sunny_rounded, 'Сегодня'),
-    (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Календарь'),
-    (Icons.folder_outlined, Icons.folder_rounded, 'Проекты'),
-    (Icons.tune_outlined, Icons.tune_rounded, 'Ещё'),
+    (PhosphorIconsRegular.sun, PhosphorIconsFill.sun, 'Сегодня'),
+    (PhosphorIconsRegular.calendarBlank, PhosphorIconsRegular.calendarBlank, 'Календарь'),
+    (PhosphorIconsRegular.folderSimple, PhosphorIconsRegular.folderSimple, 'Проекты'),
+    (PhosphorIconsRegular.slidersHorizontal, PhosphorIconsFill.slidersHorizontal, 'Ещё'),
   ];
 
   @override
@@ -163,10 +164,7 @@ class _NavItem extends StatelessWidget {
           height: 32,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            gradient: selected
-                ? LinearGradient(colors: [C.accent.withValues(alpha: 0.45), C.logo.withValues(alpha: 0.35)])
-                : null,
-            boxShadow: selected ? [BoxShadow(color: C.accent.withValues(alpha: 0.35), blurRadius: 14)] : null,
+            color: selected ? C.accent.withValues(alpha: 0.22) : null,
           ),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -175,7 +173,7 @@ class _NavItem extends StatelessWidget {
               selected ? activeIcon : icon,
               key: ValueKey(selected),
               size: 23,
-              color: selected ? Colors.white : C.text2,
+              color: selected ? C.accent2 : C.text2,
             ),
           ),
         ),
@@ -223,16 +221,9 @@ class _AddButtonState extends State<_AddButton> {
           margin: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF9F5AF7), C.accent, C.logo],
-            ),
-            boxShadow: [
-              BoxShadow(color: C.accent.withValues(alpha: 0.55), blurRadius: 18, offset: const Offset(0, 4)),
-            ],
+            color: C.accent,
           ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+          child: const Icon(PhosphorIconsBold.plus, color: Colors.white, size: 24),
         ),
       ),
     );
@@ -264,7 +255,7 @@ class _SyncErrorListenerState extends State<SyncErrorListener> {
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
             content: Row(children: [
-              const Icon(Icons.cloud_off_rounded, color: C.high, size: 18),
+              const Icon(PhosphorIconsRegular.cloudSlash, color: C.high, size: 18),
               const SizedBox(width: 10),
               Expanded(child: Text(err)),
             ]),
