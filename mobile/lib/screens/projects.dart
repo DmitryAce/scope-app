@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -621,14 +623,15 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             leading: const Icon(PhosphorIconsRegular.image),
-            title: const Text('Выбрать из галереи'),
+            title: Text(Platform.isAndroid || Platform.isIOS ? 'Выбрать из галереи' : 'Выбрать файл'),
             onTap: () => Navigator.pop(c, 'gallery'),
           ),
-          ListTile(
-            leading: const Icon(PhosphorIconsRegular.camera),
-            title: const Text('Сфотографировать'),
-            onTap: () => Navigator.pop(c, 'camera'),
-          ),
+          if (Platform.isAndroid || Platform.isIOS)
+            ListTile(
+              leading: const Icon(PhosphorIconsRegular.camera),
+              title: const Text('Сфотографировать'),
+              onTap: () => Navigator.pop(c, 'camera'),
+            ),
           if (has)
             ListTile(
               leading: const Icon(PhosphorIconsRegular.trash, color: C.urgent),

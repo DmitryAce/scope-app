@@ -40,6 +40,12 @@ class Reminders {
     await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@drawable/ic_notification'),
+        // На Windows — обычные тосты; GUID постоянный, иначе Windows считает это новым приложением.
+        windows: WindowsInitializationSettings(
+          appName: 'Scope',
+          appUserModelId: 'DrXeno.Scope',
+          guid: '6f3c2a7e-1b4d-4e8a-9c21-5d7e8f0a3b64',
+        ),
       ),
     );
     _ready = true;
@@ -99,7 +105,7 @@ class Reminders {
         await _plugin.zonedSchedule(
           id: t.id,
           scheduledDate: at,
-          notificationDetails: const NotificationDetails(android: _channel),
+          notificationDetails: const NotificationDetails(android: _channel, windows: WindowsNotificationDetails()),
           androidScheduleMode: mode,
           title: title,
           body: project == null ? t.title : '${t.title}\n${project.name}',

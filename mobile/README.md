@@ -11,4 +11,12 @@ flutter build apk --release
 ```
 
 Готовый файл: `build/app/outputs/flutter-apk/app-release.apk`.
+
+Windows (нужен включённый «Режим разработчика» — Flutter делает симлинки плагинов):
+
+```bash
+flutter build windows --release
+```
+
+Папка `build/windows/x64/runner/Release/` целиком — это приложение (`Scope.exe` + dll + `data`).
 Для теста с локальным Django: `--dart-define=SCOPE_LOCAL=http://10.0.2.2:8000`.
