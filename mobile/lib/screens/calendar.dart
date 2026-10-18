@@ -6,6 +6,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets/agenda.dart';
 import '../widgets/common.dart';
+import '../widgets/desktop.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -19,6 +20,25 @@ class CalendarScreenState extends State<CalendarScreen> {
 
   DateTime selected = dayOnly(DateTime.now());
   bool _month = false;
+  bool _layoutChosen = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // На широком экране места хватает — сразу месяц.
+    if (!_layoutChosen) {
+      _layoutChosen = true;
+      _month = isWideLayout(context);
+    }
+  }
+
+  /// Листание кнопками — мышью страницы не тянут.
+  void _step(int dir) {
+    final c = _month ? _months : _weeks;
+    if (c.hasClients) {
+      c.animateToPage(c.page!.round() + dir, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+    }
+  }
   final _showDone = ValueNotifier(true);
   late final DateTime _baseMonday = _mondayOf(dayOnly(DateTime.now()));
   late final DateTime _baseMonth = DateTime(DateTime.now().year, DateTime.now().month);
@@ -116,6 +136,18 @@ class CalendarScreenState extends State<CalendarScreen> {
                     ]),
                   ),
                   const Spacer(),
+                  if (isWideLayout(context)) ...[
+                    IconButton(
+                      tooltip: 'Назад',
+                      onPressed: () => _step(-1),
+                      icon: const Icon(PhosphorIconsRegular.caretLeft, size: 20),
+                    ),
+                    IconButton(
+                      tooltip: 'Вперёд',
+                      onPressed: () => _step(1),
+                      icon: const Icon(PhosphorIconsRegular.caretRight, size: 20),
+                    ),
+                  ],
                   if (selected != today)
                     TextButton(onPressed: () => _select(today, jump: true), child: const Text('Сегодня')),
                   IconButton(

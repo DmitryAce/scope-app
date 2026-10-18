@@ -26,8 +26,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  // Phone-style UI: start narrow and tall.
-  Win32Window::Size size(460, 900);
+  // Wide window gets the desktop layout; narrow it below 900px for the phone one.
+  Win32Window::Size size(1280, 820);
   if (!window.Create(L"Scope", origin, size)) {
     return EXIT_FAILURE;
   }

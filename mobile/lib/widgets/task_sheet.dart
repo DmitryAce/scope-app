@@ -6,6 +6,7 @@ import '../models.dart';
 import '../screens/task_editor.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'desktop.dart';
 import 'task_draft.dart';
 
 /// Открыть задачу: существующую — на полном экране, новую — в быстрой шторке.
@@ -16,6 +17,10 @@ Future<void> showTaskSheet(
   int? projectId,
 }) {
   if (task != null) {
+    if (isWideLayout(context)) {
+      DesktopPanel.openTask(task);
+      return Future.value();
+    }
     return Navigator.push(context, MaterialPageRoute(builder: (_) => TaskEditorScreen(task: task)));
   }
   return showModalBottomSheet(
@@ -83,8 +88,13 @@ class _QuickAddSheetState extends State<QuickAddSheet> {
   void _expand() {
     _sync();
     final nav = Navigator.of(context);
+    final wide = isWideLayout(context);
     nav.pop();
-    nav.push(MaterialPageRoute(builder: (_) => TaskEditorScreen(draft: d)));
+    if (wide) {
+      DesktopPanel.openDraft(d);
+    } else {
+      nav.push(MaterialPageRoute(builder: (_) => TaskEditorScreen(draft: d)));
+    }
   }
 
   @override

@@ -107,6 +107,8 @@ ThemeData buildTheme() {
       titleTextStyle: TextStyle(fontFamily: font, fontSize: 20, fontWeight: FontWeight.w700, color: C.text),
     ),
     bottomSheetTheme: const BottomSheetThemeData(
+      // На широком экране шторки не растягиваются на всё окно.
+      constraints: BoxConstraints(maxWidth: 620),
       backgroundColor: C.bg2,
       surfaceTintColor: Colors.transparent,
       showDragHandle: true,

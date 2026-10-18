@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../models.dart';
+import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/task_draft.dart';
@@ -12,10 +13,13 @@ import '../widgets/task_tile.dart';
 ///
 /// Существующая задача сохраняется сама при выходе; новая — кнопкой «Создать».
 class TaskEditorScreen extends StatefulWidget {
-  const TaskEditorScreen({super.key, this.task, this.draft});
+  const TaskEditorScreen({super.key, this.task, this.draft, this.onClose});
 
   final Task? task;
   final TaskDraft? draft;
+
+  /// Встроен в правую панель десктопа: закрытие — через колбэк, а не Navigator.
+  final VoidCallback? onClose;
 
   @override
   State<TaskEditorScreen> createState() => _TaskEditorScreenState();
@@ -32,9 +36,29 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   bool _deleted = false;
 
   bool get _isNew => widget.task == null;
+  bool get _embedded => widget.onClose != null;
+  late AppStore _store;
+  bool _closed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _store = StoreScope.read(context);
+  }
+
+  void _close() {
+    _closed = true;
+    if (_embedded) {
+      widget.onClose!();
+    } else {
+      Navigator.pop(context);
+    }
+  }
 
   @override
   void dispose() {
+    // В панели задачу могли сменить кликом по другой — сохраняем молча.
+    if (_embedded && !_closed) _autosave(silent: true);
     _title.dispose();
     _desc.dispose();
     _newItem.dispose();
@@ -54,15 +78,15 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   }
 
   /// Выход с экрана: существующую задачу молча сохраняем.
-  Future<void> _autosave() async {
+  Future<void> _autosave({bool silent = false}) async {
     _sync();
     if (_isNew || _deleted || !_dirty || d.title.trim().isEmpty) return;
-    final store = StoreScope.read(context);
-    final messenger = ScaffoldMessenger.of(context);
+    _dirty = false;
+    final messenger = silent ? null : ScaffoldMessenger.of(context);
     try {
-      await store.updateTask(widget.task!.id, d.toBody(old: widget.task));
+      await _store.updateTask(widget.task!.id, d.toBody(old: widget.task));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Не сохранилось: $e')));
+      messenger?.showSnackBar(SnackBar(content: Text('Не сохранилось: $e')));
     }
   }
 
@@ -80,7 +104,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         await store.addChecklistItem(t.id, text);
       }
       HapticFeedback.lightImpact();
-      if (mounted) Navigator.pop(context);
+      if (mounted) _close();
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
@@ -94,7 +118,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final store = StoreScope.read(context);
     final messenger = ScaffoldMessenger.of(context);
     _deleted = true;
-    Navigator.pop(context);
+    _close();
     await store.deleteTask(t);
     messenger
       ..hideCurrentSnackBar()
@@ -133,9 +157,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           leading: IconButton(
-            onPressed: () => Navigator.maybePop(context),
-            icon: Icon(_isNew ? PhosphorIconsRegular.x : PhosphorIconsRegular.caretLeft),
+            onPressed: () async {
+              if (!_embedded) return Navigator.maybePop(context).then((_) {});
+              await _autosave();
+              _close();
+            },
+            icon: Icon(_isNew || _embedded ? PhosphorIconsRegular.x : PhosphorIconsRegular.caretLeft),
           ),
           title: Text(_isNew ? 'Новая задача' : '',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),

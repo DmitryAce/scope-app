@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/task_sheet.dart';
+import '../widgets/desktop.dart';
 import 'calendar.dart';
+import 'desktop_shell.dart';
 import 'projects.dart';
 import 'settings.dart';
 import 'today.dart';
@@ -56,6 +58,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (isWideLayout(context)) return const SyncErrorListener(child: DesktopShell());
     final pages = [
       const TodayScreen(),
       CalendarScreen(key: _calendarKey),

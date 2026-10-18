@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,6 +49,8 @@ class ScopeApp extends StatelessWidget {
         builder: (context, _) => MaterialApp(
         key: ValueKey(C.accentId),
         title: 'Scope',
+        // Мышью тоже можно тянуть: листать недели, смахивать задачи.
+        scrollBehavior: const MaterialScrollBehavior().copyWith(dragDevices: PointerDeviceKind.values.toSet()),
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
         locale: const Locale('ru'),
