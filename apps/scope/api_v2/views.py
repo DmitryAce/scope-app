@@ -141,7 +141,7 @@ def projects_collection(request):
     user = request.user
     if request.method == 'GET':
         archived = request.GET.get('archived', '').lower() in ('1', 'true', 'yes')
-        qs = Project.objects.filter(user=user, is_archived=archived).order_by('-created_at')
+        qs = Project.objects.filter(user=user, is_archived=archived)
         return JsonResponse({'data': [project_to_dict(p) for p in qs], 'meta': {'count': qs.count()}})
 
     data = _parse_body(request)
@@ -194,6 +194,13 @@ def project_detail(request, pk: int):
         p.icon = str(data['icon'])[:50]
     if 'is_archived' in data:
         p.is_archived = bool(data['is_archived'])
+    if 'is_pinned' in data:
+        p.is_pinned = bool(data['is_pinned'])
+    if 'position' in data:
+        try:
+            p.position = int(data['position'])
+        except (TypeError, ValueError):
+            return _json_error('validation_error', 'position должен быть числом')
     if 'parent_id' in data:
         try:
             p.parent = _resolve_parent(user, p, data['parent_id'])
@@ -333,6 +340,7 @@ def tasks_collection(request):
         due_date=due_date,
         due_time=due_time_val,
         auto_complete=bool(data.get('auto_complete', False)),
+        auto_delete=bool(data.get('auto_delete', False)),
         reminder=reminder_val,
         duration_minutes=duration_val,
         repeat=repeat_val,
@@ -400,6 +408,9 @@ def task_detail(request, pk: int):
 
     if 'auto_complete' in data:
         task.auto_complete = bool(data['auto_complete'])
+
+    if 'auto_delete' in data:
+        task.auto_delete = bool(data['auto_delete'])
 
     if 'reminder' in data:
         try:
@@ -636,3 +647,43 @@ def checklist_item(request, pk: int):
         item.is_completed = bool(data['is_completed'])
     item.save()
     return JsonResponse({'data': task_to_dict(task)})
+
+
+@v2
+@require_http_methods(['POST'])
+def projects_reorder(request):
+    """Порядок проектов после перетаскивания: {"ids": [3, 1, 2]} — сверху вниз."""
+    data = _parse_body(request)
+    if data is None or not isinstance(data.get('ids'), list):
+        return _json_error('validation_error', 'Нужен массив ids')
+    try:
+        ids = [int(x) for x in data['ids']]
+    except (TypeError, ValueError):
+        return _json_error('validation_error', 'ids — только числа')
+    owned = set(Project.objects.filter(user=request.user, pk__in=ids).values_list('pk', flat=True))
+    if owned != set(ids):
+        return _json_error('validation_error', 'Не все проекты найдены')
+    for position, pk in enumerate(ids):
+        Project.objects.filter(pk=pk).update(position=position)
+    return JsonResponse({'data': {'reordered': len(ids)}})
+
+
+@v2
+@require_http_methods(['PATCH', 'DELETE'])
+def tag_detail(request, pk: int):
+    try:
+        tag = Tag.objects.get(pk=pk, user=request.user)
+    except Tag.DoesNotExist:
+        return _json_error('not_found', 'Тег не найден', 404)
+    if request.method == 'DELETE':
+        tag.delete()
+        return JsonResponse({'data': {'deleted': True}})
+    data = _parse_body(request)
+    if data is None:
+        return _json_error('bad_json', 'Тело запроса не JSON', 400)
+    if (data.get('name') or '').strip():
+        tag.name = data['name'].strip()[:50]
+    if data.get('color'):
+        tag.color = str(data['color'])[:7]
+    tag.save()
+    return JsonResponse({'data': tag_to_dict(tag)})

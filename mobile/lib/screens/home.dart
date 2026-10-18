@@ -20,7 +20,9 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
-  int _tab = 0;
+  // Переживает пересборку приложения при смене акцента.
+  static int _lastTab = 0;
+  int _tab = _lastTab;
   final _calendarKey = GlobalKey<CalendarScreenState>();
   DateTime _pausedAt = DateTime.now();
 
@@ -67,7 +69,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         index: _tab,
         onSelect: (i) {
           HapticFeedback.selectionClick();
-          setState(() => _tab = i);
+          setState(() => _tab = _lastTab = i);
         },
         onAdd: _add,
       ),
@@ -75,8 +77,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 }
 
-/// Плавающая «капсула» навигации: стекло, выбранный пункт раскрывается
-/// цветной плашкой с подписью, по центру — градиентная кнопка «+».
+/// Плавающая капсула: только иконки, выбранный пункт раскрывается в «пилюлю»
+/// с подписью. Кнопка «+» — отдельный круг справа.
 class ScopeNavBar extends StatelessWidget {
   const ScopeNavBar({super.key, required this.index, required this.onSelect, required this.onAdd});
 
@@ -86,58 +88,60 @@ class ScopeNavBar extends StatelessWidget {
 
   static const _items = [
     (PhosphorIconsRegular.sun, PhosphorIconsFill.sun, 'Сегодня'),
-    (PhosphorIconsRegular.calendarBlank, PhosphorIconsRegular.calendarBlank, 'Календарь'),
-    (PhosphorIconsRegular.folderSimple, PhosphorIconsRegular.folderSimple, 'Проекты'),
-    (PhosphorIconsRegular.slidersHorizontal, PhosphorIconsFill.slidersHorizontal, 'Ещё'),
+    (PhosphorIconsRegular.calendarBlank, PhosphorIconsFill.calendarBlank, 'Календарь'),
+    (PhosphorIconsRegular.folderSimple, PhosphorIconsFill.folderSimple, 'Проекты'),
+    (PhosphorIconsRegular.dotsThreeOutline, PhosphorIconsFill.dotsThreeOutline, 'Ещё'),
   ];
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).padding.bottom;
-    Widget item(int i) => Expanded(
-          child: _NavItem(
-            icon: _items[i].$1,
-            activeIcon: _items[i].$2,
-            label: _items[i].$3,
-            selected: index == i,
-            onTap: () => onSelect(i),
-          ),
-        );
     return Padding(
-      padding: EdgeInsets.fromLTRB(14, 0, 14, bottom + 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30),
-              color: C.bg3.withValues(alpha: 0.78),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [C.elevated.withValues(alpha: 0.85), C.bg2.withValues(alpha: 0.9)],
+      padding: EdgeInsets.fromLTRB(14, 0, 14, bottom + 12),
+      child: Row(children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF17171F).withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                ),
+                child: LayoutBuilder(builder: (context, c) {
+                  // Выбранный пункт шире остальных — места хватает под подпись.
+                  final wide = c.maxWidth * 0.46;
+                  final narrow = (c.maxWidth - wide) / (_items.length - 1);
+                  return Row(children: [
+                    for (var i = 0; i < _items.length; i++)
+                      _NavItem(
+                        width: i == index ? wide : narrow,
+                        icon: _items[i].$1,
+                        activeIcon: _items[i].$2,
+                        label: _items[i].$3,
+                        selected: i == index,
+                        onTap: () => onSelect(i),
+                      ),
+                  ]);
+                }),
               ),
             ),
-            child: Row(children: [
-              item(0),
-              item(1),
-              _AddButton(onTap: onAdd),
-              item(2),
-              item(3),
-            ]),
           ),
         ),
-      ),
+        const SizedBox(width: 10),
+        _AddButton(onTap: onAdd),
+      ]),
     );
   }
 }
 
 class _NavItem extends StatelessWidget {
   const _NavItem({
+    required this.width,
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -145,6 +149,7 @@ class _NavItem extends StatelessWidget {
     required this.onTap,
   });
 
+  final double width;
   final IconData icon;
   final IconData activeIcon;
   final String label;
@@ -156,39 +161,32 @@ class _NavItem extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          width: selected ? 52 : 40,
-          height: 32,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: selected ? C.accent.withValues(alpha: 0.22) : null,
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-            child: Icon(
-              selected ? activeIcon : icon,
-              key: ValueKey(selected),
-              size: 23,
-              color: selected ? C.accent2 : C.text2,
-            ),
-          ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        width: width,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: selected ? C.accent.withValues(alpha: 0.14) : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
         ),
-        const SizedBox(height: 4),
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 200),
-          style: TextStyle(
-            fontFamily: 'Manrope',
-            fontSize: 11,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            color: selected ? C.text : C.muted,
-          ),
-          child: Text(label, maxLines: 1, overflow: TextOverflow.fade, softWrap: false),
+        child: ClipRect(
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(selected ? activeIcon : icon, size: 22, color: selected ? C.accent2 : C.text2.withValues(alpha: 0.75)),
+            if (selected)
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, right: 4),
+                  child: Text(label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.fade,
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: C.text)),
+                ),
+              ),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 }
@@ -214,16 +212,16 @@ class _AddButtonState extends State<_AddButton> {
       onTap: widget.onTap,
       child: AnimatedScale(
         duration: const Duration(milliseconds: 140),
-        scale: _down ? 0.88 : 1,
+        scale: _down ? 0.9 : 1,
         child: Container(
-          width: 56,
-          height: 52,
-          margin: const EdgeInsets.symmetric(horizontal: 6),
+          width: 64,
+          height: 64,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
             color: C.accent,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6))],
           ),
-          child: const Icon(PhosphorIconsBold.plus, color: Colors.white, size: 24),
+          child: Icon(PhosphorIconsBold.plus, color: C.onAccent, size: 26),
         ),
       ),
     );

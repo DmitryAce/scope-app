@@ -37,9 +37,12 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_archived = models.BooleanField(default=False)
+    # Ручной порядок и закрепление: закреплённые всегда сверху.
+    is_pinned = models.BooleanField(default=False)
+    position = models.IntegerField(default=0)
     
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-is_pinned', 'position', '-created_at']
     
     def __str__(self):
         return self.name
@@ -74,6 +77,8 @@ class Task(models.Model):
     # Закрывать саму себя, когда день прошёл: пары, встречи и прочее, что не должно
     # висеть в просрочке, если его не отметили вручную.
     auto_complete = models.BooleanField(default=False)
+    # Одноразовое на день: прошёл день — задача исчезает совсем, не копится в истории.
+    auto_delete = models.BooleanField(default=False)
     
     due_date = models.DateField(null=True, blank=True)
     due_time = models.TimeField(null=True, blank=True)
@@ -124,6 +129,7 @@ class Task(models.Model):
         Возвращает число закрытых задач.
         """
         today = today or timezone.localdate()
+        cls.objects.filter(user=user, auto_delete=True, due_date__lt=today).delete()
         return cls.objects.filter(
             user=user,
             auto_complete=True,
@@ -189,6 +195,7 @@ class Task(models.Model):
                 due_time=self.due_time,
                 duration_minutes=self.duration_minutes,
                 auto_complete=self.auto_complete,
+                auto_delete=self.auto_delete,
                 repeat_parent=self,
                 order=self.order,
             )

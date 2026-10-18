@@ -30,6 +30,8 @@ class Project {
   final bool isArchived;
   final int? parentId;
   final String? avatar; // путь /media/… на сервере
+  final bool isPinned;
+  final int position;
 
   const Project({
     required this.id,
@@ -40,6 +42,8 @@ class Project {
     this.isArchived = false,
     this.parentId,
     this.avatar,
+    this.isPinned = false,
+    this.position = 0,
   });
 
   Color get tint => parseHex(color);
@@ -53,6 +57,8 @@ class Project {
         isArchived: (j['is_archived'] ?? false) as bool,
         parentId: j['parent_id'] as int?,
         avatar: j['avatar'] as String?,
+        isPinned: (j['is_pinned'] ?? false) as bool,
+        position: (j['position'] ?? 0) as int,
       );
 
   Map<String, dynamic> toJson() => {
@@ -64,6 +70,8 @@ class Project {
         'is_archived': isArchived,
         'parent_id': parentId,
         'avatar': avatar,
+        'is_pinned': isPinned,
+        'position': position,
       };
 }
 
@@ -105,6 +113,7 @@ class Task {
   final int priority;
   final bool isCompleted;
   final bool autoComplete;
+  final bool autoDelete;
   final DateTime? dueDate;
   final String? dueTime; // HH:MM
   final int? durationMinutes;
@@ -123,6 +132,7 @@ class Task {
     this.priority = 2,
     this.isCompleted = false,
     this.autoComplete = false,
+    this.autoDelete = false,
     this.dueDate,
     this.dueTime,
     this.durationMinutes,
@@ -179,6 +189,7 @@ class Task {
         priority: priority ?? this.priority,
         isCompleted: isCompleted ?? this.isCompleted,
         autoComplete: autoComplete,
+        autoDelete: autoDelete,
         dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
         dueTime: clearDueTime ? null : (dueTime ?? this.dueTime),
         durationMinutes: durationMinutes,
@@ -198,6 +209,7 @@ class Task {
         priority: (j['priority'] ?? 2) as int,
         isCompleted: (j['is_completed'] ?? false) as bool,
         autoComplete: (j['auto_complete'] ?? false) as bool,
+        autoDelete: (j['auto_delete'] ?? false) as bool,
         dueDate: parseYmd(j['due_date'] as String?),
         dueTime: j['due_time'] as String?,
         durationMinutes: j['duration_minutes'] as int?,
@@ -219,6 +231,7 @@ class Task {
         'priority': priority,
         'is_completed': isCompleted,
         'auto_complete': autoComplete,
+        'auto_delete': autoDelete,
         'due_date': dueDate == null ? null : ymd(dueDate!),
         'due_time': dueTime,
         'duration_minutes': durationMinutes,

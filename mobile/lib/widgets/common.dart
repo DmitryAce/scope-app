@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -247,16 +248,19 @@ class ProjectAvatar extends StatelessWidget {
       ),
     );
     if (url == null) return monogram;
+    final px = (size * MediaQuery.of(context).devicePixelRatio).round();
     return ClipRRect(
       borderRadius: radius,
-      child: Image.network(
-        url,
+      child: CachedNetworkImage(
+        imageUrl: url,
+        cacheKey: StoreScope.of(context).avatarPath(p),
         width: size,
         height: size,
         fit: BoxFit.cover,
-        cacheWidth: (size * MediaQuery.of(context).devicePixelRatio).round(),
-        errorBuilder: (_, __, ___) => monogram,
-        frameBuilder: (_, child, frame, sync) => sync || frame != null ? child : monogram,
+        memCacheWidth: px,
+        fadeInDuration: const Duration(milliseconds: 120),
+        placeholder: (_, __) => monogram,
+        errorWidget: (_, __, ___) => monogram,
       ),
     );
   }

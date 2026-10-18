@@ -14,8 +14,19 @@ class C {
   static const text2 = Color(0xFF9090A0);
   static const muted = Color(0xFF5C5C6D);
 
-  static const accent = Color(0xFF7C3AED);
-  static const accent2 = Color(0xFFA78BFA);
+  // Акцент выбирается в настройках, поэтому не const: см. [Accent] и [C.apply].
+  static Color accent = accents.first.main;
+  static Color accent2 = accents.first.soft;
+  static Color onAccent = accents.first.on;
+  static String accentId = accents.first.id;
+
+  static void apply(String id) {
+    final a = accents.firstWhere((x) => x.id == id, orElse: () => accents.first);
+    accent = a.main;
+    accent2 = a.soft;
+    onAccent = a.on;
+    accentId = a.id;
+  }
   static const logo = Color(0xFF8B2942);
   static const logoDark = Color(0xFF6B1D32);
 
@@ -44,6 +55,27 @@ class C {
   ];
 }
 
+/// Акцентный цвет: [main] — кнопки и заливки, [soft] — текст и иконки на тёмном,
+/// [on] — то, что лежит поверх [main].
+class Accent {
+  const Accent(this.id, this.name, this.main, this.soft, this.on);
+
+  final String id;
+  final String name;
+  final Color main;
+  final Color soft;
+  final Color on;
+}
+
+const accents = [
+  Accent('graphite', 'Графит', Color(0xFFE6E6EC), Color(0xFFE6E6EC), Color(0xFF111116)),
+  Accent('wine', 'Бордо', Color(0xFFB3365B), Color(0xFFE38AA4), Colors.white),
+  Accent('blue', 'Синий', Color(0xFF3D7BF0), Color(0xFF8DB4FF), Colors.white),
+  Accent('mint', 'Мята', Color(0xFF34C083), Color(0xFF7FE0B4), Color(0xFF07170F)),
+  Accent('amber', 'Янтарь', Color(0xFFEFA83C), Color(0xFFFFCB78), Color(0xFF1C1305)),
+  Accent('lilac', 'Сирень', Color(0xFF8F84E8), Color(0xFFBDB6FF), Colors.white),
+];
+
 String hexOf(Color c) =>
     '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
@@ -53,9 +85,9 @@ ThemeData buildTheme() {
     useMaterial3: true,
     brightness: Brightness.dark,
     fontFamily: font,
-    colorScheme: const ColorScheme.dark(
+    colorScheme: ColorScheme.dark(
       primary: C.accent,
-      onPrimary: Colors.white,
+      onPrimary: C.onAccent,
       secondary: C.accent2,
       surface: C.bg2,
       onSurface: C.text,
@@ -85,7 +117,7 @@ ThemeData buildTheme() {
       backgroundColor: C.bg2,
       surfaceTintColor: Colors.transparent,
     ),
-    snackBarTheme: const SnackBarThemeData(
+    snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: C.elevated,
       contentTextStyle: TextStyle(fontFamily: font, color: C.text),
@@ -105,7 +137,7 @@ ThemeData buildTheme() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: C.accent, width: 1.6),
+        borderSide: BorderSide(color: C.accent, width: 1.6),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
@@ -124,9 +156,9 @@ ThemeData buildTheme() {
       iconTheme: WidgetStateProperty.resolveWith((s) =>
           IconThemeData(color: s.contains(WidgetState.selected) ? C.accent2 : C.text2)),
     ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: C.accent,
-      foregroundColor: Colors.white,
+      foregroundColor: C.onAccent,
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: C.elevated,
@@ -145,6 +177,8 @@ ThemeData buildTheme() {
       side: const BorderSide(color: C.border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       labelStyle: const TextStyle(fontFamily: font, color: C.text, fontWeight: FontWeight.w600),
+      // Подпись выбранного чипа лежит на акценте — у светлого «Графита» она тёмная.
+      secondaryLabelStyle: TextStyle(fontFamily: font, color: C.onAccent, fontWeight: FontWeight.w700),
     ),
   );
 }

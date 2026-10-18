@@ -123,10 +123,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onPressed: _busy ? null : _login,
                     child: _busy
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                            child: CircularProgressIndicator(strokeWidth: 2.4, color: C.onAccent))
                         : const Text('Войти', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   ),
                 ),

@@ -7,6 +7,7 @@ import '../api.dart';
 import '../notifications.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'tags.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -40,6 +41,57 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ]),
+        const SectionHeader('Оформление'),
+        _Card(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+            child: Row(children: [
+              for (final a in accents)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      store.setAccent(a.id);
+                    },
+                    child: Column(children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: a.main,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: C.accentId == a.id ? C.text : Colors.transparent,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: C.accentId == a.id ? Icon(PhosphorIconsBold.check, size: 16, color: a.on) : null,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(a.name,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: C.accentId == a.id ? C.text : C.muted,
+                          )),
+                    ]),
+                  ),
+                ),
+            ]),
+          ),
+        ]),
+        const SectionHeader('Организация'),
+        _Card(children: [
+          ListTile(
+            leading: Icon(PhosphorIconsRegular.hash, color: C.accent2),
+            title: const Text('Теги', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text('${store.tags.length}', style: const TextStyle(color: C.text2)),
+            trailing: const Icon(PhosphorIconsBold.caretRight, size: 14, color: C.muted),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TagsScreen())),
+          ),
+        ]),
         const SectionHeader('Сервер'),
         _Card(children: [
           ListTile(
@@ -57,7 +109,7 @@ class SettingsScreen extends StatelessWidget {
         _Card(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-            child: Row(children: const [
+            child: Row(children: [
               Icon(PhosphorIconsRegular.bellSimple, color: C.accent2),
               SizedBox(width: 12),
               Expanded(
@@ -130,7 +182,7 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Center(child: Text('Scope для Android · 1.2', style: TextStyle(color: C.muted, fontSize: 12))),
+        const Center(child: Text('Scope · 1.3', style: TextStyle(color: C.muted, fontSize: 12))),
       ],
     );
   }

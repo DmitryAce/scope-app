@@ -40,9 +40,13 @@ class ScopeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Смена акцента пересобирает приложение целиком: цвета читаются при сборке виджетов.
     return StoreScope(
       store: store,
-      child: MaterialApp(
+      child: ListenableBuilder(
+        listenable: store,
+        builder: (context, _) => MaterialApp(
+        key: ValueKey(C.accentId),
         title: 'Scope',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
@@ -54,6 +58,7 @@ class ScopeApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         home: const _Root(),
+      ),
       ),
     );
   }

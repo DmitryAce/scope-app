@@ -86,6 +86,14 @@
                 <span class="form-switch-hint">не повиснет в просрочке</span>
             </label>
 
+            <label class="form-switch-row">
+                <input type="hidden" name="auto_delete" value="0">
+                <input type="checkbox" name="auto_delete" value="1" {% if task.auto_delete %}checked{% endif %}>
+                <i class="ri-delete-bin-6-line"></i>
+                <span>Удалить в конце дня</span>
+                <span class="form-switch-hint">одноразовая, без следа в истории</span>
+            </label>
+
             <div class="form-group">
                 <label class="form-label">Напомнить</label>
                 <input type="datetime-local" name="reminder" class="form-input" value='{% if task.reminder %}{{ task.reminder|date:"Y-m-d\TH:i" }}{% endif %}'>

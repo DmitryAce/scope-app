@@ -560,6 +560,7 @@ def task_create(request):
             due_date=due_date if due_date else None,
             due_time=due_time if due_time else None,
             auto_complete=_post_flag(request.POST, 'auto_complete'),
+            auto_delete=_post_flag(request.POST, 'auto_delete'),
             reminder=_parse_reminder_post(request.POST.get('reminder')),
             duration_minutes=_post_duration(request.POST.get('duration_minutes')),
             repeat=_post_repeat(request.POST),
@@ -646,6 +647,8 @@ def task_edit(request, pk):
 
         if 'auto_complete' in request.POST:
             task.auto_complete = _post_flag(request.POST, 'auto_complete')
+        if 'auto_delete' in request.POST:
+            task.auto_delete = _post_flag(request.POST, 'auto_delete')
 
         if 'reminder' in request.POST:
             task.reminder = _parse_reminder_post(request.POST.get('reminder'))
@@ -759,6 +762,8 @@ def _save_task_from_post(task, user, post):
 
     if 'auto_complete' in post:
         task.auto_complete = _post_flag(post, 'auto_complete')
+    if 'auto_delete' in post:
+        task.auto_delete = _post_flag(post, 'auto_delete')
 
     if 'reminder' in post:
         task.reminder = _parse_reminder_post(post.get('reminder'))

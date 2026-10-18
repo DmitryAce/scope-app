@@ -222,16 +222,20 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               if (_isNew)
                 for (var i = 0; i < d.newChecklist.length; i++)
                   _ItemRow(
+                    key: ValueKey('new-$i-${d.newChecklist[i]}'),
                     text: d.newChecklist[i],
                     done: false,
                     onToggle: null,
+                    onRename: (v) => setState(() => d.newChecklist[i] = v),
                     onDelete: () => setState(() => d.newChecklist.removeAt(i)),
                   )
               else
                 for (final c in checklist)
                   _ItemRow(
+                    key: ValueKey('item-${c.id}'),
                     text: c.text,
                     done: c.isCompleted,
+                    onRename: (v) => store.renameChecklistItem(live!, c, v),
                     onToggle: () {
                       HapticFeedback.selectionClick();
                       store.toggleChecklistItem(live!, c);
@@ -331,6 +335,22 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 activeTrackColor: C.accent,
                 onChanged: (v) => setState(() {
                   d.autoComplete = v;
+                  if (v) d.autoDelete = false;
+                  _dirty = true;
+                }),
+              ),
+              SwitchListTile(
+                contentPadding: const EdgeInsets.only(left: 16, right: 10),
+                secondary: const Icon(PhosphorIconsRegular.trashSimple, size: 21, color: C.text2),
+                title: const Text('Удалить, когда день пройдёт',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                subtitle: const Text('Одноразовая: на следующий день её не будет',
+                    style: TextStyle(fontSize: 12, color: C.muted)),
+                value: d.autoDelete,
+                activeTrackColor: C.urgent,
+                onChanged: (v) => setState(() {
+                  d.autoDelete = v;
+                  if (v) d.autoComplete = false;
                   _dirty = true;
                 }),
               ),
@@ -410,50 +430,110 @@ class _Field extends StatelessWidget {
   }
 }
 
-class _ItemRow extends StatelessWidget {
-  const _ItemRow({required this.text, required this.done, required this.onToggle, required this.onDelete});
+class _ItemRow extends StatefulWidget {
+  const _ItemRow({
+    super.key,
+    required this.text,
+    required this.done,
+    required this.onToggle,
+    required this.onRename,
+    required this.onDelete,
+  });
 
   final String text;
   final bool done;
   final VoidCallback? onToggle;
+  final ValueChanged<String> onRename;
   final VoidCallback onDelete;
 
   @override
+  State<_ItemRow> createState() => _ItemRowState();
+}
+
+/// Пункт чек-листа: квадрат — отметить, текст — сразу редактируется.
+class _ItemRowState extends State<_ItemRow> {
+  late final _text = TextEditingController(text: widget.text);
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit();
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ItemRow old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && widget.text != _text.text) _text.text = widget.text;
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final v = _text.text.trim();
+    if (v.isEmpty) {
+      _text.text = widget.text;
+    } else if (v != widget.text) {
+      widget.onRename(v);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
-        child: Row(children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              color: done ? C.accent : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: done ? C.accent : C.muted, width: 1.6),
+    final done = widget.done;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+      child: Row(children: [
+        InkResponse(
+          radius: 22,
+          onTap: widget.onToggle,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: done ? C.accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: done ? C.accent : C.muted, width: 1.6),
+              ),
+              child: done ? Icon(PhosphorIconsBold.check, size: 13, color: C.onAccent) : null,
             ),
-            child: done ? const Icon(PhosphorIconsBold.check, size: 13, color: Colors.white) : null,
           ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Text(text,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: done ? C.muted : C.text,
-                  decoration: done ? TextDecoration.lineThrough : null,
-                  decorationColor: C.muted,
-                )),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _text,
+            focusNode: _focus,
+            maxLines: null,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _focus.unfocus(),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: done ? C.muted : C.text,
+              decoration: done ? TextDecoration.lineThrough : null,
+              decorationColor: C.muted,
+            ),
+            decoration: _bare('').copyWith(contentPadding: const EdgeInsets.symmetric(vertical: 12)),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: onDelete,
-            icon: const Icon(PhosphorIconsRegular.x, size: 16, color: C.muted),
-          ),
-        ]),
-      ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: widget.onDelete,
+          icon: const Icon(PhosphorIconsRegular.x, size: 16, color: C.muted),
+        ),
+      ]),
     );
   }
 }

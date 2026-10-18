@@ -1,9 +1,12 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../models.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'project_picker.dart';
+import '../screens/tags.dart';
 
 /// Редактируемая копия задачи: общая для быстрого ввода и полного экрана.
 class TaskDraft {
@@ -18,6 +21,7 @@ class TaskDraft {
         repeat = t?.repeat ?? '',
         tags = {...?t?.tagIds},
         autoComplete = t?.autoComplete ?? false,
+        autoDelete = t?.autoDelete ?? false,
         reminder = t?.reminderAt;
 
   String title;
@@ -30,6 +34,7 @@ class TaskDraft {
   String repeat;
   Set<int> tags;
   bool autoComplete;
+  bool autoDelete;
   DateTime? reminder;
 
   /// Пункты чек-листа новой задачи — уходят на сервер после создания.
@@ -57,6 +62,7 @@ class TaskDraft {
       'due_time': date == null ? '' : (timeStr ?? ''),
       'duration_minutes': duration,
       'auto_complete': autoComplete,
+      'auto_delete': autoDelete,
       'reminder': reminderStr ?? '',
       'tag_ids': tags.toList(),
     };
@@ -116,18 +122,100 @@ class Pick {
     return true;
   }
 
+  /// Длительность: быстрые варианты и барабан «часы : минуты» с шагом 5 минут.
   static Future<bool> duration(BuildContext context, TaskDraft d) async {
-    final v = await choose<int>(
-      context,
-      'Длительность',
-      [
-        for (final m in [15, 30, 45, 60, 90, 120, 180]) (m, fmtDuration(m), PhosphorIconsRegular.timer, null),
-        (0, 'Без длительности', PhosphorIconsRegular.prohibit, C.muted),
-      ],
-      current: d.duration ?? 0,
+    var value = Duration(minutes: d.duration ?? 60);
+    var preset = 0; // меняется только от чипов — тогда барабан встаёт на новое значение
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      builder: (c) => StatefulBuilder(builder: (c, set) {
+        final minutes = value.inMinutes;
+        final ends = d.timeStr == null || minutes == 0 ? null : endTime(d.timeStr!, minutes);
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+              child: Row(children: [
+                const Text('Длительность', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                const Spacer(),
+                Text(
+                  minutes == 0 ? '—' : (ends == null ? fmtDuration(minutes) : '${fmtDuration(minutes)} · до $ends'),
+                  style: TextStyle(color: C.accent2, fontWeight: FontWeight.w700),
+                ),
+              ]),
+            ),
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  for (final m in [15, 30, 45, 60, 90, 120, 180, 240])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6, top: 6),
+                      child: ChoiceChip(
+                        label: Text(fmtDuration(m)),
+                        selected: minutes == m,
+                        showCheckmark: false,
+                        selectedColor: C.accent,
+                        onSelected: (_) => set(() {
+                          value = Duration(minutes: m);
+                          preset++;
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 190,
+              child: CupertinoTheme(
+                data: const CupertinoThemeData(
+                  brightness: Brightness.dark,
+                  textTheme: CupertinoTextThemeData(
+                    pickerTextStyle: TextStyle(fontFamily: 'Manrope', fontSize: 21, color: C.text),
+                  ),
+                ),
+                child: CupertinoTimerPicker(
+                  key: ValueKey(preset),
+                  mode: CupertinoTimerPickerMode.hm,
+                  minuteInterval: 5,
+                  initialTimerDuration: Duration(minutes: (minutes ~/ 5) * 5),
+                  onTimerDurationChanged: (v) => set(() => value = v),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Row(children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(c, 0),
+                      child: const Text('Без длительности'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: C.accent),
+                      onPressed: () => Navigator.pop(c, value.inMinutes),
+                      child: const Text('Готово', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ]),
+        );
+      }),
     );
-    if (v == null) return false;
-    d.duration = v == 0 ? null : v;
+    if (result == null) return false;
+    d.duration = result == 0 ? null : result;
     return true;
   }
 
@@ -197,27 +285,7 @@ class Pick {
   }
 
   static Future<bool> project(BuildContext context, TaskDraft d) async {
-    final store = StoreScope.read(context);
-    Widget row(BuildContext c, Project? p, {bool nested = false}) => ListTile(
-          contentPadding: EdgeInsets.only(left: nested ? 44 : 20, right: 20),
-          leading: ProjectAvatar(project: p, size: nested ? 28 : 34),
-          title: Text(p?.name ?? 'Без проекта', style: const TextStyle(fontWeight: FontWeight.w600)),
-          trailing: (p?.id ?? 0) == (d.projectId ?? 0)
-              ? const Icon(PhosphorIconsBold.check, color: C.accent2, size: 18)
-              : null,
-          onTap: () => Navigator.pop(c, p?.id ?? 0),
-        );
-    final v = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      builder: (c) => _SheetFrame(title: 'Проект', children: [
-        row(c, null),
-        for (final p in store.rootProjects) ...[
-          row(c, p),
-          for (final ch in store.childrenOf(p.id)) row(c, ch, nested: true),
-        ],
-      ]),
-    );
+    final v = await showProjectPicker(context, title: 'Проект', selectedId: d.projectId);
     if (v == null) return false;
     d.projectId = v == 0 ? null : v;
     return true;
@@ -241,11 +309,14 @@ class Pick {
             ),
           ),
           children: [
-            if (store.tags.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('Тегов пока нет', style: TextStyle(color: C.text2)),
-              ),
+            ListTile(
+              leading: Icon(PhosphorIconsRegular.plus, color: C.accent2),
+              title: Text('Новый тег', style: TextStyle(color: C.accent2, fontWeight: FontWeight.w700)),
+              onTap: () async {
+                final t = await showTagEditor(c);
+                if (t != null) set(() => selected.add(t.id));
+              },
+            ),
             for (final t in store.tags)
               CheckboxListTile(
                 value: selected.contains(t.id),
@@ -277,7 +348,7 @@ Future<T?> choose<T>(BuildContext context, String title, List<(T, String, IconDa
         ListTile(
           leading: Icon(icon, color: color ?? C.text2, size: 22),
           title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          trailing: value == current ? const Icon(PhosphorIconsBold.check, color: C.accent2, size: 18) : null,
+          trailing: value == current ? Icon(PhosphorIconsBold.check, color: C.accent2, size: 18) : null,
           onTap: () => Navigator.pop(c, value),
         ),
     ]),

@@ -4,11 +4,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../models.dart';
+import '../store.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/project_picker.dart';
 import '../widgets/task_sheet.dart';
 import '../widgets/task_tile.dart';
-import 'search.dart';
 
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key});
@@ -18,12 +19,22 @@ class ProjectsScreen extends StatefulWidget {
 }
 
 class _ProjectsScreenState extends State<ProjectsScreen> {
+  final _q = TextEditingController();
   bool _showArchived = false;
+  bool _reorder = false;
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final roots = store.rootProjects;
+    final query = _q.text.trim().toLowerCase();
+
     return RefreshIndicator(
       color: C.accent2,
       backgroundColor: C.bg3,
@@ -40,70 +51,135 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   const Text('Проекты',
                       style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
                   const Spacer(),
-                  IconButton(
-                    onPressed: () =>
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
-                    icon: const Icon(PhosphorIconsRegular.magnifyingGlass, size: 24),
-                  ),
-                  IconButton(
-                    tooltip: 'Новый проект',
-                    onPressed: () => showProjectEditor(context),
-                    icon: const Icon(PhosphorIconsRegular.plusCircle, size: 25),
-                  ),
+                  if (_reorder)
+                    TextButton(
+                      onPressed: () => setState(() => _reorder = false),
+                      child: const Text('Готово', style: TextStyle(fontWeight: FontWeight.w800)),
+                    )
+                  else ...[
+                    IconButton(
+                      tooltip: 'Упорядочить',
+                      onPressed: roots.length < 2
+                          ? null
+                          : () => setState(() {
+                                _reorder = true;
+                                _q.clear();
+                              }),
+                      icon: const Icon(PhosphorIconsRegular.arrowsDownUp, size: 23),
+                    ),
+                    IconButton(
+                      tooltip: 'Новый проект',
+                      onPressed: () => openProjectEditor(context),
+                      icon: const Icon(PhosphorIconsRegular.plusCircle, size: 25),
+                    ),
+                  ],
                 ]),
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Group(children: [
-                _ProjectRow(project: null, count: store.inbox.length),
-              ]),
+          if (!_reorder)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                child: TextField(
+                  controller: _q,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Поиск проектов',
+                    prefixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass, size: 20, color: C.muted),
+                    suffixIcon: _q.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () => setState(_q.clear),
+                            icon: const Icon(PhosphorIconsRegular.x, size: 18, color: C.muted),
+                          ),
+                    fillColor: C.bg2,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                ),
+              ),
             ),
-          ),
-          if (roots.isEmpty)
+          if (_reorder) ...[
             const SliverToBoxAdapter(
-              child: EmptyState(
-                icon: PhosphorIconsLight.folderSimple,
-                title: 'Проектов пока нет',
-                subtitle: 'Создайте первый — плюс вверху справа',
-              ),
-            )
-          else ...[
-            const SliverToBoxAdapter(child: SectionHeader('Мои проекты')),
-            SliverToBoxAdapter(
-              child: Group(children: [
-                for (final p in roots) ...[
-                  _ProjectRow(project: p, count: store.openCount(p.id)),
-                  for (final c in store.childrenOf(p.id))
-                    _ProjectRow(project: c, count: store.openCount(c.id), nested: true),
-                ],
-              ]),
-            ),
-          ],
-          if (store.archivedProjects.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: SectionHeader(
-                'Архив',
-                count: store.archivedProjects.length,
-                color: C.text2,
-                onTap: () => setState(() => _showArchived = !_showArchived),
-                trailing: Caret(open: _showArchived),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(22, 4, 22, 10),
+                child: Text('Перетащите за ручку справа. Закреплённые всегда сверху.',
+                    style: TextStyle(color: C.muted, fontSize: 13)),
               ),
             ),
-            if (_showArchived)
+            SliverToBoxAdapter(child: _ReorderList(projects: roots)),
+          ] else if (query.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: _searchResults(store, query),
+              ),
+            ),
+          ] else ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Group(children: [ProjectRow(project: null, count: store.inbox.length)]),
+              ),
+            ),
+            if (roots.isEmpty)
+              const SliverToBoxAdapter(
+                child: EmptyState(
+                  icon: PhosphorIconsLight.folderSimple,
+                  title: 'Проектов пока нет',
+                  subtitle: 'Создайте первый — плюс вверху справа',
+                ),
+              )
+            else ...[
+              const SliverToBoxAdapter(child: SectionHeader('Мои проекты')),
               SliverToBoxAdapter(
                 child: Group(children: [
-                  for (final p in store.archivedProjects)
-                    _ProjectRow(project: p, count: store.openCount(p.id), archived: true),
+                  for (final p in roots) ...[
+                    ProjectRow(project: p, count: store.openCount(p.id)),
+                    for (final c in store.childrenOf(p.id))
+                      ProjectRow(project: c, count: store.openCount(c.id), nested: true),
+                  ],
                 ]),
               ),
+            ],
+            if (store.archivedProjects.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: SectionHeader(
+                  'Архив',
+                  count: store.archivedProjects.length,
+                  color: C.text2,
+                  onTap: () => setState(() => _showArchived = !_showArchived),
+                  trailing: Caret(open: _showArchived),
+                ),
+              ),
+              if (_showArchived)
+                SliverToBoxAdapter(
+                  child: Group(children: [
+                    for (final p in store.archivedProjects)
+                      ProjectRow(project: p, count: store.openCount(p.id), archived: true),
+                  ]),
+                ),
+            ],
           ],
           const SliverToBoxAdapter(child: SizedBox(height: 130)),
         ],
       ),
     );
+  }
+
+  Widget _searchResults(AppStore store, String query) {
+    final found = [for (final p in store.projects) if (p.name.toLowerCase().contains(query)) p];
+    if (found.isEmpty) {
+      return const EmptyState(icon: PhosphorIconsLight.magnifyingGlassMinus, title: 'Ничего не найдено');
+    }
+    return Group(children: [
+      for (final p in found)
+        ProjectRow(project: p, count: store.openCount(p.id), hint: store.projectById(p.parentId)?.name),
+    ]);
   }
 }
 
@@ -111,27 +187,115 @@ void openProject(BuildContext context, Project? p) {
   Navigator.push(context, MaterialPageRoute(builder: (_) => ProjectScreen(projectId: p?.id)));
 }
 
-class _ProjectRow extends StatelessWidget {
-  const _ProjectRow({required this.project, required this.count, this.nested = false, this.archived = false});
+void openProjectEditor(BuildContext context, {Project? project, int? parentId}) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => ProjectEditorScreen(project: project, parentId: parentId)),
+  );
+}
+
+/// Действия по долгому нажатию на проект.
+Future<void> showProjectActions(BuildContext context, Project p) {
+  HapticFeedback.mediumImpact();
+  final store = StoreScope.read(context);
+  return showModalBottomSheet(
+    context: context,
+    builder: (c) => SafeArea(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
+          child: Row(children: [
+            ProjectAvatar(project: p, size: 40),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(p.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+          ]),
+        ),
+        Group(children: [
+          if (!p.isArchived)
+            _SheetAction(
+              p.isPinned ? PhosphorIconsRegular.pushPinSlash : PhosphorIconsRegular.pushPin,
+              p.isPinned ? 'Открепить' : 'Закрепить сверху',
+              () {
+                Navigator.pop(c);
+                store.togglePin(p);
+              },
+            ),
+          _SheetAction(PhosphorIconsRegular.pencilSimple, 'Изменить', () {
+            Navigator.pop(c);
+            openProjectEditor(context, project: p);
+          }),
+          if (p.parentId == null && !p.isArchived)
+            _SheetAction(PhosphorIconsRegular.folderSimplePlus, 'Добавить подпроект', () {
+              Navigator.pop(c);
+              openProjectEditor(context, parentId: p.id);
+            }),
+          _SheetAction(
+            p.isArchived ? PhosphorIconsRegular.arrowUUpLeft : PhosphorIconsRegular.archive,
+            p.isArchived ? 'Вернуть из архива' : 'В архив',
+            () {
+              Navigator.pop(c);
+              store.updateProject(p.id, {'is_archived': !p.isArchived});
+            },
+          ),
+        ]),
+        const SizedBox(height: 16),
+      ]),
+    ),
+  );
+}
+
+class _SheetAction extends StatelessWidget {
+  const _SheetAction(this.icon, this.label, this.onTap, {this.color});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(children: [
+            Icon(icon, size: 21, color: color ?? C.text2),
+            const SizedBox(width: 18),
+            Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color ?? C.text)),
+          ]),
+        ),
+      );
+}
+
+class ProjectRow extends StatelessWidget {
+  const ProjectRow({
+    super.key,
+    required this.project,
+    required this.count,
+    this.nested = false,
+    this.archived = false,
+    this.hint,
+  });
 
   final Project? project;
   final int count;
   final bool nested;
   final bool archived;
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
     final p = project;
     final store = StoreScope.of(context);
     final subs = p == null || nested ? 0 : store.childrenOf(p.id).length;
+    final subtitle = hint ?? (p == null ? 'Задачи без даты' : (subs > 0 ? '$subs ${_subs(subs)}' : null));
     return InkWell(
       onTap: () => openProject(context, p),
-      onLongPress: p == null
-          ? null
-          : () {
-              HapticFeedback.mediumImpact();
-              showProjectEditor(context, project: p);
-            },
+      onLongPress: p == null ? null : () => showProjectActions(context, p),
       child: Padding(
         padding: EdgeInsets.fromLTRB(nested ? 34 : 12, nested ? 8 : 10, 12, nested ? 8 : 10),
         child: Row(children: [
@@ -139,30 +303,30 @@ class _ProjectRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(p?.name ?? 'Входящие',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: nested ? 14.5 : 15.5,
-                    fontWeight: FontWeight.w700,
-                    color: archived ? C.text2 : C.text,
-                  )),
-              if (p == null || subs > 0)
-                Text(p == null ? 'Задачи без даты' : '$subs ${_subs(subs)}',
-                    style: const TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+              Row(children: [
+                Flexible(
+                  child: Text(p?.name ?? 'Входящие',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: nested ? 14.5 : 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: archived ? C.text2 : C.text,
+                      )),
+                ),
+                if (p?.isPinned == true) ...[
+                  const SizedBox(width: 6),
+                  Icon(PhosphorIconsFill.pushPin, size: 13, color: C.accent2),
+                ],
+              ]),
+              if (subtitle != null)
+                Text(subtitle, style: const TextStyle(fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
             ]),
           ),
-          if (archived)
-            TextButton(
-              onPressed: () => store.updateProject(p!.id, {'is_archived': false}),
-              child: const Text('Вернуть'),
-            )
-          else ...[
-            if (count > 0)
-              Text('$count', style: const TextStyle(color: C.text2, fontWeight: FontWeight.w700, fontSize: 14)),
-            const SizedBox(width: 6),
-            const Icon(PhosphorIconsBold.caretRight, size: 14, color: C.muted),
-          ],
+          if (count > 0)
+            Text('$count', style: const TextStyle(color: C.text2, fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(width: 6),
+          const Icon(PhosphorIconsBold.caretRight, size: 14, color: C.muted),
         ]),
       ),
     );
@@ -173,6 +337,77 @@ class _ProjectRow extends StatelessWidget {
     if (m10 == 1 && m100 != 11) return 'подпроект';
     if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'подпроекта';
     return 'подпроектов';
+  }
+}
+
+/// Перетаскиваемый список проектов одного уровня (корни или подпроекты одного родителя).
+class _ReorderList extends StatelessWidget {
+  const _ReorderList({required this.projects});
+
+  final List<Project> projects;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(color: C.bg2, borderRadius: BorderRadius.circular(18)),
+      clipBehavior: Clip.antiAlias,
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        itemCount: projects.length,
+        proxyDecorator: (child, _, __) => Material(
+          color: C.elevated,
+          elevation: 8,
+          borderRadius: BorderRadius.circular(14),
+          child: child,
+        ),
+        onReorder: (from, to) {
+          HapticFeedback.selectionClick();
+          final list = [...projects];
+          if (to > from) to--;
+          final moved = list.removeAt(from);
+          // Закреплённые не уезжают вниз под незакреплённые.
+          list.insert(to, moved);
+          store.reorderProjects([for (final p in list) p.id]);
+        },
+        itemBuilder: (context, i) {
+          final p = projects[i];
+          return Container(
+            key: ValueKey(p.id),
+            decoration: BoxDecoration(
+              border: i == 0 ? null : const Border(top: BorderSide(color: C.border, width: 0.6)),
+            ),
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+            child: Row(children: [
+              ProjectAvatar(project: p, size: 34),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(p.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+              IconButton(
+                tooltip: p.isPinned ? 'Открепить' : 'Закрепить',
+                onPressed: () => store.togglePin(p),
+                icon: Icon(p.isPinned ? PhosphorIconsFill.pushPin : PhosphorIconsRegular.pushPin,
+                    size: 19, color: p.isPinned ? C.accent2 : C.muted),
+              ),
+              ReorderableDragStartListener(
+                index: i,
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Icon(PhosphorIconsBold.dotsSixVertical, size: 20, color: C.text2),
+                ),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -188,6 +423,7 @@ class ProjectScreen extends StatefulWidget {
 
 class _ProjectScreenState extends State<ProjectScreen> {
   bool _showDone = false;
+  bool _reorderSubs = false;
 
   @override
   Widget build(BuildContext context) {
@@ -220,16 +456,23 @@ class _ProjectScreenState extends State<ProjectScreen> {
     return Scaffold(
       appBar: AppBar(
         actions: [
-          if (p != null)
+          if (p != null) ...[
             IconButton(
-              onPressed: () => showProjectEditor(context, project: p),
+              tooltip: p.isPinned ? 'Открепить' : 'Закрепить',
+              onPressed: () => store.togglePin(p),
+              icon: Icon(p.isPinned ? PhosphorIconsFill.pushPin : PhosphorIconsRegular.pushPin,
+                  color: p.isPinned ? C.accent2 : null),
+            ),
+            IconButton(
+              onPressed: () => openProjectEditor(context, project: p),
               icon: const Icon(PhosphorIconsRegular.pencilSimple),
             ),
+          ],
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => showTaskSheet(context, projectId: p?.id),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: const CircleBorder(),
         child: const Icon(PhosphorIconsBold.plus, size: 24),
       ),
       body: RefreshIndicator(
@@ -243,7 +486,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 4),
               child: Row(children: [
                 GestureDetector(
-                  onTap: p == null ? null : () => showProjectEditor(context, project: p),
+                  onTap: p == null ? null : () => openProjectEditor(context, project: p),
                   child: ProjectAvatar(project: p, size: 56),
                 ),
                 const SizedBox(width: 16),
@@ -273,11 +516,36 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
                 child: Text(p.description, style: const TextStyle(color: C.text2)),
               ),
-            if (children.isNotEmpty) ...[
-              SectionHeader('Подпроекты', count: children.length),
-              Group(children: [
-                for (final c in children) _ProjectRow(project: c, count: store.openCount(c.id)),
-              ]),
+            if (p != null && p.parentId == null) ...[
+              SectionHeader(
+                'Подпроекты',
+                count: children.isEmpty ? null : children.length,
+                trailing: children.length < 2
+                    ? null
+                    : TextButton(
+                        onPressed: () => setState(() => _reorderSubs = !_reorderSubs),
+                        child: Text(_reorderSubs ? 'Готово' : 'Порядок',
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+              ),
+              if (_reorderSubs)
+                _ReorderList(projects: children)
+              else
+                Group(children: [
+                  for (final c in children) ProjectRow(project: c, count: store.openCount(c.id)),
+                  InkWell(
+                    onTap: () => openProjectEditor(context, parentId: p.id),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Row(children: [
+                        Icon(PhosphorIconsRegular.plus, size: 20, color: C.accent2),
+                        SizedBox(width: 20),
+                        Text('Добавить подпроект',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.accent2)),
+                      ]),
+                    ),
+                  ),
+                ]),
             ],
             if (open.isEmpty)
               const EmptyState(
@@ -313,36 +581,37 @@ class _ProjectScreenState extends State<ProjectScreen> {
   }
 }
 
-/// Создание/правка проекта: аватарка, имя, родитель, цвет; архив и удаление.
-Future<void> showProjectEditor(BuildContext context, {Project? project, int? parentId}) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (_) => _ProjectEditor(project: project, parentId: parentId),
-  );
-}
-
-class _ProjectEditor extends StatefulWidget {
-  const _ProjectEditor({this.project, this.parentId});
+/// Проект на весь экран: аватарка, название, описание, цвет, родитель, закрепление.
+class ProjectEditorScreen extends StatefulWidget {
+  const ProjectEditorScreen({super.key, this.project, this.parentId});
 
   final Project? project;
   final int? parentId;
 
   @override
-  State<_ProjectEditor> createState() => _ProjectEditorState();
+  State<ProjectEditorScreen> createState() => _ProjectEditorScreenState();
 }
 
-class _ProjectEditorState extends State<_ProjectEditor> {
+class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   late final _name = TextEditingController(text: widget.project?.name ?? '');
-  late Color _color = widget.project?.tint ?? C.projectPalette.first;
+  late final _desc = TextEditingController(text: widget.project?.description ?? '');
+  late Color _color = widget.project?.tint ??
+      (widget.parentId != null ? C.projectPalette[2] : C.projectPalette.first);
   late int? _parentId = widget.project?.parentId ?? widget.parentId;
+  late bool _pinned = widget.project?.isPinned ?? false;
   List<int>? _newAvatar;
   String _newAvatarName = 'a.jpg';
   bool _removeAvatar = false;
   bool _busy = false;
 
   bool get _editing => widget.project != null;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _desc.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAvatar() async {
     final has = (widget.project?.avatar != null && !_removeAvatar) || _newAvatar != null;
@@ -378,11 +647,12 @@ class _ProjectEditorState extends State<_ProjectEditor> {
       });
       return;
     }
+    // Аватарка в списке — максимум 56px; 256px с запасом под плотные экраны и весит ~15 КБ.
     final file = await ImagePicker().pickImage(
       source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-      imageQuality: 88,
+      maxWidth: 256,
+      maxHeight: 256,
+      imageQuality: 80,
     );
     if (file == null) return;
     final bytes = await file.readAsBytes();
@@ -393,18 +663,42 @@ class _ProjectEditorState extends State<_ProjectEditor> {
     });
   }
 
+  Future<void> _pickParent() async {
+    final v = await showProjectPicker(
+      context,
+      title: 'Внутри проекта',
+      selectedId: _parentId,
+      rootsOnly: true,
+      excludeId: widget.project?.id,
+      noneLabel: 'Отдельный проект',
+    );
+    if (v != null) setState(() => _parentId = v == 0 ? null : v);
+  }
+
   Future<void> _save() async {
     final name = _name.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      HapticFeedback.heavyImpact();
+      return;
+    }
     setState(() => _busy = true);
     final store = StoreScope.read(context);
     try {
       int id;
+      final body = {
+        'name': name,
+        'description': _desc.text.trim(),
+        'color': hexOf(_color),
+        'parent_id': _parentId,
+      };
       if (!_editing) {
         id = (await store.createProject(name, hexOf(_color), parentId: _parentId)).id;
+        if (_desc.text.trim().isNotEmpty || _pinned) {
+          await store.updateProject(id, {'description': _desc.text.trim(), 'is_pinned': _pinned});
+        }
       } else {
         id = widget.project!.id;
-        await store.updateProject(id, {'name': name, 'color': hexOf(_color), 'parent_id': _parentId});
+        await store.updateProject(id, {...body, 'is_pinned': _pinned});
       }
       if (_newAvatar != null) {
         await store.setAvatar(id, _newAvatar, _newAvatarName);
@@ -418,13 +712,6 @@ class _ProjectEditorState extends State<_ProjectEditor> {
         showError(context, e);
       }
     }
-  }
-
-  Future<void> _archive() async {
-    final store = StoreScope.read(context);
-    final nav = Navigator.of(context);
-    await store.updateProject(widget.project!.id, {'is_archived': !widget.project!.isArchived});
-    nav.pop();
   }
 
   Future<void> _delete() async {
@@ -459,7 +746,7 @@ class _ProjectEditorState extends State<_ProjectEditor> {
     final store = StoreScope.of(context);
     final p = widget.project;
     final hasChildren = p != null && store.childrenOf(p.id).isNotEmpty;
-    final parents = [for (final x in store.rootProjects) if (x.id != p?.id) x];
+    final parent = store.projectById(_parentId);
     final preview = Project(
       id: p?.id ?? -1,
       name: _name.text.isEmpty ? '?' : _name.text,
@@ -468,168 +755,177 @@ class _ProjectEditorState extends State<_ProjectEditor> {
       parentId: _parentId,
     );
 
-    Widget avatar;
-    if (_newAvatar != null) {
-      avatar = ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Image.memory(Uint8List.fromList(_newAvatar!), width: 76, height: 76, fit: BoxFit.cover),
-      );
-    } else {
-      avatar = ProjectAvatar(project: preview, size: 76);
-    }
+    final avatar = _newAvatar != null
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: Image.memory(Uint8List.fromList(_newAvatar!), width: 88, height: 88, fit: BoxFit.cover),
+          )
+        : ProjectAvatar(project: preview, size: 88);
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
-      child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(
-            child: GestureDetector(
-              onTap: _pickAvatar,
-              child: Stack(clipBehavior: Clip.none, children: [
-                avatar,
-                Positioned(
-                  right: -4,
-                  bottom: -4,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: C.elevated,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: C.bg2, width: 3),
-                    ),
-                    child: const Icon(PhosphorIconsBold.camera, size: 14, color: C.text),
-                  ),
-                ),
-              ]),
-            ),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _name,
-            autofocus: !_editing,
-            textCapitalization: TextCapitalization.sentences,
-            onChanged: (_) => setState(() {}),
-            onSubmitted: (_) => _save(),
-            decoration: const InputDecoration(hintText: 'Название проекта'),
-          ),
-          const SizedBox(height: 16),
-          const Text('Цвет', style: TextStyle(color: C.text2, fontWeight: FontWeight.w700, fontSize: 13)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in C.projectPalette)
-              GestureDetector(
-                onTap: () => setState(() => _color = c),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: c,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: c.toARGB32() == _color.toARGB32() ? Colors.white : Colors.transparent,
-                      width: 2.5,
-                    ),
-                  ),
-                ),
-              ),
-          ]),
-          const SizedBox(height: 18),
-          const Text('Внутри проекта', style: TextStyle(color: C.text2, fontWeight: FontWeight.w700, fontSize: 13)),
-          const SizedBox(height: 8),
-          if (hasChildren)
-            const Text('У проекта есть подпроекты — сам он вложенным быть не может.',
-                style: TextStyle(color: C.muted, fontSize: 13))
-          else
-            SizedBox(
-              height: 40,
-              child: ListView(scrollDirection: Axis.horizontal, children: [
-                _ParentChip(
-                  label: 'Отдельно',
-                  selected: _parentId == null,
-                  onTap: () => setState(() => _parentId = null),
-                ),
-                for (final x in parents)
-                  _ParentChip(
-                    project: x,
-                    label: x.name,
-                    selected: _parentId == x.id,
-                    onTap: () => setState(() => _parentId = x.id),
-                  ),
-              ]),
-            ),
-          const SizedBox(height: 22),
-          Row(children: [
-            if (_editing) ...[
-              IconButton.filled(
-                style: IconButton.styleFrom(backgroundColor: C.bg3, foregroundColor: C.text, fixedSize: const Size(50, 50)),
-                tooltip: p!.isArchived ? 'Из архива' : 'В архив',
-                onPressed: _archive,
-                icon: Icon(p.isArchived ? PhosphorIconsRegular.arrowUUpLeft : PhosphorIconsRegular.archive),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                style: IconButton.styleFrom(backgroundColor: C.bg3, foregroundColor: C.text, fixedSize: const Size(50, 50)),
-                tooltip: 'Удалить',
-                onPressed: _delete,
-                icon: const Icon(PhosphorIconsRegular.trash, color: C.urgent),
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: SizedBox(
-                height: 50,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: C.accent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: _busy ? null : _save,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                      : Text(_editing ? 'Сохранить' : 'Создать',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
-                ),
-              ),
-            ),
-          ]),
-        ]),
-      ),
-    );
-  }
-}
-
-class _ParentChip extends StatelessWidget {
-  const _ParentChip({required this.label, required this.selected, required this.onTap, this.project});
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final Project? project;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Material(
-        color: selected ? C.accent.withValues(alpha: 0.2) : C.bg3,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: selected ? C.accent : Colors.transparent),
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(PhosphorIconsRegular.x),
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(children: [
-              if (project != null) ...[ProjectAvatar(project: project, size: 22), const SizedBox(width: 8)],
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        title: Text(_editing ? 'Проект' : (widget.parentId != null ? 'Новый подпроект' : 'Новый проект'),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: C.accent, visualDensity: VisualDensity.compact),
+              onPressed: _busy ? null : _save,
+              child: Text(_editing ? 'Сохранить' : 'Создать', style: const TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(padding: const EdgeInsets.only(bottom: 40), children: [
+        const SizedBox(height: 8),
+        Center(
+          child: GestureDetector(
+            onTap: _pickAvatar,
+            child: Stack(clipBehavior: Clip.none, children: [
+              avatar,
+              Positioned(
+                right: -4,
+                bottom: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: C.elevated,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: C.bg, width: 3),
+                  ),
+                  child: const Icon(PhosphorIconsBold.camera, size: 15, color: C.text),
+                ),
+              ),
             ]),
           ),
         ),
-      ),
+        const SizedBox(height: 20),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: TextField(
+            controller: _name,
+            autofocus: !_editing,
+            textAlign: TextAlign.center,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            decoration: const InputDecoration(
+              hintText: 'Название',
+              filled: false,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: TextField(
+            controller: _desc,
+            minLines: 1,
+            maxLines: 4,
+            textAlign: TextAlign.center,
+            textCapitalization: TextCapitalization.sentences,
+            style: const TextStyle(fontSize: 14, color: C.text2),
+            decoration: const InputDecoration(
+              hintText: 'Описание (необязательно)',
+              filled: false,
+              isDense: true,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            children: [
+              for (final c in C.projectPalette)
+                GestureDetector(
+                  onTap: () => setState(() => _color = c),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 36,
+                    height: 36,
+                    margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: c,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: c.toARGB32() == _color.toARGB32() ? Colors.white : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Group(children: [
+          InkWell(
+            onTap: hasChildren ? null : _pickParent,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+              child: Row(children: [
+                const Icon(PhosphorIconsRegular.treeStructure, size: 21, color: C.text2),
+                const SizedBox(width: 18),
+                const Text('Внутри проекта', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                if (parent != null) ...[ProjectAvatar(project: parent, size: 22), const SizedBox(width: 8)],
+                Flexible(
+                  child: Text(
+                    hasChildren ? 'есть подпроекты' : (parent?.name ?? 'Отдельно'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: parent == null ? C.muted : C.text2,
+                    ),
+                  ),
+                ),
+                if (!hasChildren) ...[
+                  const SizedBox(width: 6),
+                  const Icon(PhosphorIconsBold.caretRight, size: 13, color: C.muted),
+                ],
+              ]),
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: const EdgeInsets.only(left: 16, right: 10),
+            secondary: const Icon(PhosphorIconsRegular.pushPin, size: 21, color: C.text2),
+            title: const Text('Закрепить сверху', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            value: _pinned,
+            activeTrackColor: C.accent,
+            onChanged: (v) => setState(() => _pinned = v),
+          ),
+        ]),
+        if (_editing) ...[
+          const SizedBox(height: 14),
+          Group(children: [
+            _SheetAction(
+              p!.isArchived ? PhosphorIconsRegular.arrowUUpLeft : PhosphorIconsRegular.archive,
+              p.isArchived ? 'Вернуть из архива' : 'В архив',
+              () async {
+                final nav = Navigator.of(context);
+                await store.updateProject(p.id, {'is_archived': !p.isArchived});
+                nav.pop();
+              },
+            ),
+            _SheetAction(PhosphorIconsRegular.trash, 'Удалить проект', _delete, color: C.urgent),
+          ]),
+        ],
+      ]),
     );
   }
 }

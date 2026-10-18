@@ -109,3 +109,41 @@ class ChecklistApiTests(TestCase):
         self.assertEqual([c['text'] for c in task['checklist']], ['Зарядка'])
         listed = self.client.get('/api/v2/tasks/', **self.auth).json()['data'][0]
         self.assertEqual(len(listed['checklist']), 1)
+
+
+class OrderingTagsAutoDeleteTests(TestCase):
+    def setUp(self):
+        from apps.scope.models import ApiAccessToken
+
+        self.user = User.objects.create_user('dave', password='x')
+        raw, _ = ApiAccessToken.issue(self.user)
+        self.auth = {'HTTP_AUTHORIZATION': f'Bearer {raw}'}
+
+    def _req(self, method, url, body=None):
+        return getattr(self.client, method)(url, json.dumps(body or {}), content_type='application/json', **self.auth)
+
+    def test_reorder_and_pin(self):
+        a, b, c = (self._req('post', '/api/v2/projects/', {'name': n}).json()['data']['id'] for n in 'abc')
+        self.assertEqual(self._req('post', '/api/v2/projects/reorder/', {'ids': [b, c, a]}).status_code, 200)
+        names = [p['name'] for p in self.client.get('/api/v2/projects/', **self.auth).json()['data']]
+        self.assertEqual(names, ['b', 'c', 'a'])
+        self._req('patch', f'/api/v2/projects/{a}/', {'is_pinned': True})
+        names = [p['name'] for p in self.client.get('/api/v2/projects/', **self.auth).json()['data']]
+        self.assertEqual(names, ['a', 'b', 'c'])
+
+    def test_tag_edit_and_delete(self):
+        tag = self._req('post', '/api/v2/tags/', {'name': 'x'}).json()['data']
+        self.assertEqual(self._req('patch', f"/api/v2/tags/{tag['id']}/", {'name': 'дом', 'color': '#22C55E'}).json()['data']['name'], 'дом')
+        self.assertEqual(self._req('delete', f"/api/v2/tags/{tag['id']}/").status_code, 200)
+        self.assertEqual(self.client.get('/api/v2/tags/', **self.auth).json()['data'], [])
+
+    def test_auto_delete_removes_past_tasks(self):
+        from datetime import date, timedelta
+
+        from apps.scope.models import Task
+
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        self._req('post', '/api/v2/tasks/', {'title': 'одноразовая', 'due_date': yesterday, 'auto_delete': True})
+        self._req('post', '/api/v2/tasks/', {'title': 'обычная', 'due_date': yesterday})
+        self._req('post', '/api/v2/housekeeping/')
+        self.assertEqual(list(Task.objects.filter(user=self.user).values_list('title', flat=True)), ['обычная'])

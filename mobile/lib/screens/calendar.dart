@@ -43,16 +43,32 @@ class CalendarScreenState extends State<CalendarScreen> {
     super.dispose();
   }
 
-  void _select(DateTime d, {bool jump = false}) {
+  bool _jumping = false;
+
+  /// [jump] — перелистать полосу недели/месяца к выбранному дню («Сегодня», выбор даты).
+  Future<void> _select(DateTime d, {bool jump = false}) async {
     HapticFeedback.selectionClick();
     setState(() => selected = dayOnly(d));
     _load(d);
-    if (jump) {
+    if (!jump) return;
+    _jumping = true;
+    const dur = Duration(milliseconds: 380);
+    const curve = Curves.easeOutCubic;
+    final moves = <Future<void>>[];
+    if (_weeks.hasClients) {
+      moves.add(_weeks.animateToPage(_weekPageOf(d), duration: dur, curve: curve));
+    } else {
       _weeks.dispose();
-      _months.dispose();
       _weeks = PageController(initialPage: _weekPageOf(d));
+    }
+    if (_months.hasClients) {
+      moves.add(_months.animateToPage(_monthPageOf(d), duration: dur, curve: curve));
+    } else {
+      _months.dispose();
       _months = PageController(initialPage: _monthPageOf(d));
     }
+    await Future.wait(moves);
+    _jumping = false;
   }
 
   void _load(DateTime around) {
@@ -137,7 +153,7 @@ class CalendarScreenState extends State<CalendarScreen> {
                       color: C.accent.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text('сегодня',
+                    child: Text('сегодня',
                         style: TextStyle(fontSize: 12, color: C.accent2, fontWeight: FontWeight.w700)),
                   ),
               ]),
@@ -152,7 +168,7 @@ class CalendarScreenState extends State<CalendarScreen> {
 
   Widget _buildWeek(DateTime today) {
     return SizedBox(
-      height: 92,
+      height: 78,
       child: PageView.builder(
         controller: _weeks,
         onPageChanged: (p) => _load(_weekAt(p)),
@@ -192,7 +208,7 @@ class CalendarScreenState extends State<CalendarScreen> {
           onPageChanged: (p) {
             final m = _monthAt(p);
             _load(m);
-            if (selected.month != m.month || selected.year != m.year) {
+            if (!_jumping && (selected.month != m.month || selected.year != m.year)) {
               setState(() => selected = m);
             }
           },
@@ -242,33 +258,36 @@ class _DayCell extends StatelessWidget {
     final isToday = day == today;
     final weekend = day.weekday >= 6;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => onTap(day),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: isSel ? C.accent : C.bg2,
-          border: Border.all(color: isToday && !isSel ? C.accent2 : (isSel ? Colors.transparent : C.borderLight)),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(fmtShortWeekday(day),
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: isSel || isToday ? C.accent2 : (weekend ? C.logo.withValues(alpha: 0.95) : C.muted),
+            )),
+        const SizedBox(height: 6),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSel ? C.accent : (isToday ? C.accent.withValues(alpha: 0.16) : Colors.transparent),
+          ),
+          child: Text('${day.day}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: isSel || isToday ? FontWeight.w800 : FontWeight.w600,
+                color: isSel ? C.onAccent : (isToday ? C.accent2 : C.text),
+              )),
         ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(fmtShortWeekday(day),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isSel ? Colors.white70 : (weekend ? C.logo.withValues(alpha: 0.9) : C.text2),
-              )),
-          const SizedBox(height: 2),
-          Text('${day.day}',
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
-                color: isSel ? Colors.white : C.text,
-              )),
-          const SizedBox(height: 4),
-          _LoadDots(total: total, done: done, light: isSel),
-        ]),
-      ),
+        const SizedBox(height: 5),
+        _LoadDots(total: total, done: done, light: false),
+      ]),
     );
   }
 }
@@ -295,25 +314,31 @@ class _MonthCell extends StatelessWidget {
     final isToday = day == today;
     final outside = day.month != month;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => onTap(day),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: isSel ? C.accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: isToday && !isSel ? Border.all(color: C.accent2) : null,
-        ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('${day.day}',
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSel ? C.accent : (isToday ? C.accent.withValues(alpha: 0.16) : Colors.transparent),
+          ),
+          child: Text('${day.day}',
               style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: isSel ? Colors.white : (outside ? C.muted.withValues(alpha: 0.6) : C.text),
+                fontWeight: isSel || isToday ? FontWeight.w800 : FontWeight.w600,
+                color: isSel
+                    ? C.onAccent
+                    : isToday
+                        ? C.accent2
+                        : (outside ? C.muted.withValues(alpha: 0.6) : C.text),
               )),
-          const SizedBox(height: 3),
-          _LoadDots(total: total, done: done, light: isSel),
-        ]),
-      ),
+        ),
+        const SizedBox(height: 3),
+        _LoadDots(total: total, done: done, light: false),
+      ]),
     );
   }
 }

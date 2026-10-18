@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'models.dart';
 import 'notifications.dart';
+import 'theme.dart';
 
 /// Всё состояние приложения: сессия, выбор сервера, кэш задач и проектов.
 ///
@@ -43,6 +44,7 @@ class AppStore extends ChangeNotifier {
     );
     username = _prefs.getString('username');
     leadMinutes = _prefs.getInt('lead_minutes') ?? 15;
+    C.apply(_prefs.getString('accent') ?? accents.first.id);
     _loadCache();
     ready = true;
     notifyListeners();
@@ -100,6 +102,12 @@ class AppStore extends ChangeNotifier {
 
   String get localUrl => api.localUrl;
   String get remoteUrl => api.remoteUrl;
+
+  Future<void> setAccent(String id) async {
+    C.apply(id);
+    await _prefs.setString('accent', id);
+    notifyListeners();
+  }
 
   Future<void> setLeadMinutes(int m) async {
     leadMinutes = m;
@@ -289,16 +297,57 @@ class AppStore extends ChangeNotifier {
     return list;
   }
 
-  /// Проекты верхнего уровня; подпроекты живут внутри родителя.
-  List<Project> get rootProjects => [for (final p in projects) if (p.parentId == null || projectById(p.parentId) == null) p];
+  static int _byOrder(Project a, Project b) {
+    if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+    return a.position.compareTo(b.position);
+  }
 
-  List<Project> childrenOf(int id) => [for (final p in projects) if (p.parentId == id) p];
+  /// Проекты верхнего уровня; подпроекты живут внутри родителя.
+  List<Project> get rootProjects =>
+      [for (final p in projects) if (p.parentId == null || projectById(p.parentId) == null) p]..sort(_byOrder);
+
+  List<Project> childrenOf(int id) => [for (final p in projects) if (p.parentId == id) p]..sort(_byOrder);
+
+  /// Новый порядок после перетаскивания (внутри одного уровня).
+  Future<void> reorderProjects(List<int> ids) async {
+    final pos = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+    projects = [
+      for (final p in projects)
+        pos.containsKey(p.id) ? Project.fromJson({...p.toJson(), 'position': pos[p.id]}) : p,
+    ];
+    _changed();
+    try {
+      await api.post('projects/reorder/', {'ids': ids});
+    } on ApiException catch (e) {
+      _fail(e);
+    }
+  }
+
+  Future<void> togglePin(Project p) => updateProject(p.id, {'is_pinned': !p.isPinned});
+
+  Future<void> updateTag(int id, {String? name, String? color}) async {
+    final j = await api.patch('tags/$id/', {'name': ?name, 'color': ?color});
+    final t = Tag.fromJson(j);
+    tags = [for (final x in tags) x.id == id ? t : x];
+    _changed();
+  }
+
+  Future<void> deleteTag(int id) async {
+    await api.delete('tags/$id/');
+    tags = [for (final x in tags) if (x.id != id) x];
+    for (final t in _tasks.values.where((t) => t.tagIds.contains(id)).toList()) {
+      _tasks[t.id] = Task.fromJson({...t.toJson(), 'tag_ids': [for (final x in t.tagIds) if (x != id) x]});
+    }
+    _changed();
+  }
 
   Set<int> _family(int id) => {id, for (final c in childrenOf(id)) c.id};
 
   /// Аватарка проекта, а если своей нет — родителя.
-  String? avatarUrl(Project p) =>
-      api.mediaUrl(p.avatar) ?? api.mediaUrl(projectById(p.parentId)?.avatar);
+  String? avatarUrl(Project p) => api.mediaUrl(avatarPath(p));
+
+  /// Путь картинки на сервере — ключ дискового кэша, одинаковый дома и снаружи.
+  String? avatarPath(Project p) => p.avatar ?? projectById(p.parentId)?.avatar;
 
   int openCount(int projectId, {bool withChildren = true}) {
     final ids = withChildren ? _family(projectId) : {projectId};
@@ -407,6 +456,17 @@ class AppStore extends ChangeNotifier {
     });
     notifyListeners();
     return _checklistCall(() => api.patch('checklist/${item.id}/', {'is_completed': !item.isCompleted}));
+  }
+
+  Future<void> renameChecklistItem(Task t, ChecklistItem item, String text) {
+    _tasks[t.id] = Task.fromJson({
+      ...t.toJson(),
+      'checklist': [
+        for (final c in t.checklist) c.id == item.id ? {...c.toJson(), 'text': text} : c.toJson(),
+      ],
+    });
+    notifyListeners();
+    return _checklistCall(() => api.patch('checklist/${item.id}/', {'text': text}));
   }
 
   Future<void> deleteChecklistItem(Task t, ChecklistItem item) {

@@ -187,9 +187,9 @@ class _QuickAddSheetState extends State<QuickAddSheet> {
                 style: IconButton.styleFrom(backgroundColor: C.accent),
                 onPressed: _saving ? null : _save,
                 icon: _saving
-                    ? const SizedBox(
-                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(PhosphorIconsBold.arrowUp, size: 20, color: Colors.white),
+                    ? SizedBox(
+                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: C.onAccent))
+                    : Icon(PhosphorIconsBold.arrowUp, size: 20, color: C.onAccent),
               ),
             ),
           ]),

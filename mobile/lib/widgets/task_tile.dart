@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'task_actions.dart';
 import 'task_sheet.dart';
 
 /// Строка задачи внутри [Group]. Свайп вправо — выполнить, влево — на завтра.
@@ -105,6 +106,7 @@ class TaskTile extends StatelessWidget {
 
     final row = InkWell(
       onTap: () => showTaskSheet(context, task: task),
+      onLongPress: () => showTaskActions(context, task),
       child: Opacity(
         opacity: dim ? 0.55 : 1,
         child: Padding(
@@ -177,7 +179,7 @@ class TaskTile extends StatelessWidget {
         alignLeft: true,
       ),
       secondaryBackground: const _SwipeBg(
-        color: C.accent,
+        color: C.medium,
         icon: PhosphorIconsBold.arrowRight,
         label: 'На завтра',
         alignLeft: false,
@@ -295,7 +297,7 @@ class CheckCircle extends StatelessWidget {
             duration: const Duration(milliseconds: 200),
             scale: done ? 1 : 0,
             curve: Curves.easeOutBack,
-            child: Icon(PhosphorIconsBold.check, size: size * 0.6, color: Colors.white),
+            child: Icon(PhosphorIconsBold.check, size: size * 0.6, color: C.onAccent),
           ),
         ),
       ),
