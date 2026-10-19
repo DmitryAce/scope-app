@@ -3,6 +3,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/desktop.dart';
 import 'settings.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -50,6 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final wide = isWideLayout(context);
     return Scaffold(
       body: Stack(children: [
         // Мягкое свечение фона, как на веб-версии.
@@ -67,12 +69,24 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(28),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Center(child: ScopeLogo(size: 72)),
+              // На широком окне форма не растягивается: карточка по центру.
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Container(
+                  padding: wide ? const EdgeInsets.fromLTRB(32, 36, 32, 28) : EdgeInsets.zero,
+                  decoration: wide
+                      ? BoxDecoration(
+                          color: C.bg2,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: C.borderLight),
+                        )
+                      : null,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Center(child: ScopeLogo(size: wide ? 60 : 72)),
                 const SizedBox(height: 22),
                 const Center(
                   child: Text('Scope',
-                      style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, letterSpacing: -1)),
+                      style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -1)),
                 ),
                 const SizedBox(height: 36),
                 TextField(
@@ -138,6 +152,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ]),
+                ),
+              ),
             ),
           ),
         ),

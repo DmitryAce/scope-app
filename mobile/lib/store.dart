@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'models.dart';
 import 'notifications.dart';
+import 'session.dart';
 import 'theme.dart';
 
 /// Всё состояние приложения: сессия, выбор сервера, кэш задач и проектов.
@@ -36,13 +37,32 @@ class AppStore extends ChangeNotifier {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    var token = _prefs.getString('token');
+    username = _prefs.getString('username');
+    var source = token != null ? 'prefs' : 'none';
+    if (token == null) {
+      // Настройки могли не прочитаться (так было после перезагрузки Windows) —
+      // берём вход из защищённого хранилища и возвращаем его в настройки.
+      final (backupToken, backupUser) = await Session.readBackup();
+      if (backupToken != null) {
+        token = backupToken;
+        username ??= backupUser;
+        source = 'secure';
+        await _prefs.setString('token', backupToken);
+        if (backupUser != null) await _prefs.setString('username', backupUser);
+      }
+    } else {
+      // Старые установки: продублировать уже существующий вход.
+      final (backupToken, _) = await Session.readBackup();
+      if (backupToken != token) await Session.save(token, username ?? '');
+    }
+    Session.log('start: keys=${_prefs.getKeys().length} token=$source');
     api = ScopeApi(
       localUrl: _prefs.getString('local_url') ?? defaultLocalUrl,
       remoteUrl: _prefs.getString('remote_url') ?? defaultRemoteUrl,
       mode: BackendMode.values[_prefs.getInt('mode') ?? 0],
-      token: _prefs.getString('token'),
+      token: token,
     );
-    username = _prefs.getString('username');
     leadMinutes = _prefs.getInt('lead_minutes') ?? 15;
     C.apply(_prefs.getString('accent') ?? accents.first.id);
     _loadCache();
@@ -61,6 +81,8 @@ class AppStore extends ChangeNotifier {
     username = user.trim();
     await _prefs.setString('token', token);
     await _prefs.setString('username', username!);
+    await Session.save(token, username!);
+    Session.log('login');
     notifyListeners();
     await refresh();
     await Reminders.instance.requestPermissions();
@@ -78,6 +100,7 @@ class AppStore extends ChangeNotifier {
     _tasks.clear();
     await _prefs.remove('token');
     await _prefs.remove('username');
+    await Session.clear();
     await _prefs.remove('cache');
     await Reminders.instance.cancelAll();
     notifyListeners();
@@ -152,6 +175,7 @@ class AppStore extends ChangeNotifier {
       _reschedule();
     } on ApiException catch (e) {
       if (e.isAuth) {
+        Session.log('logout: server rejected token (401)');
         await logout();
         error = 'Сессия истекла — войдите снова';
       } else {
