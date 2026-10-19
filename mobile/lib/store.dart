@@ -365,13 +365,76 @@ class AppStore extends ChangeNotifier {
     _changed();
   }
 
-  Set<int> _family(int id) => {id, for (final c in childrenOf(id)) c.id};
+  /// Сколько уровней всего: проект → подпроект → под-подпроект → под-под-подпроект.
+  static const maxProjectLevels = 4;
+
+  /// Проект и все его потомки на любой глубине.
+  Set<int> _family(int id) => {id, for (final c in childrenOf(id)) ..._family(c.id)};
+
+  Set<int> descendantsOf(int id) => _family(id)..remove(id);
+
+  /// 0 — проект верхнего уровня.
+  int depthOf(Project p) {
+    var d = 0;
+    var cur = projectById(p.parentId);
+    while (cur != null && d < 10) {
+      d++;
+      cur = projectById(cur.parentId);
+    }
+    return d;
+  }
+
+  /// Сколько уровней под проектом (0 — нет подпроектов).
+  int heightOf(Project p) {
+    var h = 0;
+    for (final c in childrenOf(p.id)) {
+      final ch = 1 + heightOf(c);
+      if (ch > h) h = ch;
+    }
+    return h;
+  }
+
+  /// Путь от корня до родителя: «Webstead › Клиент».
+  List<Project> ancestorsOf(Project p) {
+    final out = <Project>[];
+    var cur = projectById(p.parentId);
+    while (cur != null && out.length < 10) {
+      out.insert(0, cur);
+      cur = projectById(cur.parentId);
+    }
+    return out;
+  }
+
+  /// Можно ли сделать [parent] родителем для [project] (null — новый проект).
+  bool canNestUnder(Project parent, Project? project) {
+    if (project != null && (parent.id == project.id || descendantsOf(project.id).contains(parent.id))) {
+      return false;
+    }
+    final height = project == null ? 0 : heightOf(project);
+    return depthOf(parent) + 1 + height <= maxProjectLevels - 1;
+  }
+
+  /// Дерево в порядке показа: (проект, глубина).
+  List<(Project, int)> projectTree({int? under, int depth = 0}) {
+    final level = under == null ? rootProjects : childrenOf(under);
+    return [
+      for (final p in level) ...[(p, depth), ...projectTree(under: p.id, depth: depth + 1)],
+    ];
+  }
 
   /// Аватарка проекта, а если своей нет — родителя.
   String? avatarUrl(Project p) => api.mediaUrl(avatarPath(p));
 
   /// Путь картинки на сервере — ключ дискового кэша, одинаковый дома и снаружи.
-  String? avatarPath(Project p) => p.avatar ?? projectById(p.parentId)?.avatar;
+  /// Своя аватарка или ближайшего предка, у кого она есть.
+  String? avatarPath(Project p) {
+    Project? cur = p;
+    for (var i = 0; cur != null && i < 10; i++) {
+      if (cur.avatar != null) return cur.avatar;
+      cur = projectById(cur.parentId);
+    }
+    return null;
+  }
 
   int openCount(int projectId, {bool withChildren = true}) {
     final ids = withChildren ? _family(projectId) : {projectId};

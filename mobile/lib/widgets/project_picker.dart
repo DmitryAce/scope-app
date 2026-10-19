@@ -11,8 +11,7 @@ Future<int?> showProjectPicker(
   BuildContext context, {
   required String title,
   int? selectedId,
-  bool rootsOnly = false,
-  int? excludeId,
+  bool Function(Project)? allow,
   String noneLabel = 'Без проекта',
 }) {
   return showModalBottomSheet<int>(
@@ -22,8 +21,7 @@ Future<int?> showProjectPicker(
     builder: (_) => _ProjectPicker(
       title: title,
       selectedId: selectedId,
-      rootsOnly: rootsOnly,
-      excludeId: excludeId,
+      allow: allow,
       noneLabel: noneLabel,
     ),
   );
@@ -33,15 +31,14 @@ class _ProjectPicker extends StatefulWidget {
   const _ProjectPicker({
     required this.title,
     required this.selectedId,
-    required this.rootsOnly,
-    required this.excludeId,
+    required this.allow,
     required this.noneLabel,
   });
 
   final String title;
   final int? selectedId;
-  final bool rootsOnly;
-  final int? excludeId;
+  /// Какие проекты можно выбрать (остальные видны блёкло — для понимания дерева).
+  final bool Function(Project)? allow;
   final String noneLabel;
 
   @override
@@ -62,27 +59,34 @@ class _ProjectPickerState extends State<_ProjectPicker> {
     final store = StoreScope.of(context);
     final query = _q.text.trim().toLowerCase();
 
-    Widget row(Project? p, {bool nested = false, String? hint}) {
+    Widget row(Project? p, {int depth = 0, String? hint}) {
       final selected = (p?.id ?? 0) == (widget.selectedId ?? 0);
+      final enabled = p == null || widget.allow == null || widget.allow!(p);
       return InkWell(
-        onTap: () => Navigator.pop(context, p?.id ?? 0),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(nested ? 46 : 18, 9, 18, 9),
-          child: Row(children: [
-            ProjectAvatar(project: p, size: nested ? 28 : 34),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(p?.name ?? widget.noneLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                if (hint != null)
-                  Text(hint, style: const TextStyle(fontSize: 12, color: C.muted, fontWeight: FontWeight.w600)),
-              ]),
-            ),
-            if (selected) Icon(PhosphorIconsBold.check, color: C.accent2, size: 18),
-          ]),
+        onTap: enabled ? () => Navigator.pop(context, p?.id ?? 0) : null,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.35,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(18.0 + depth * 22, 9, 18, 9),
+            child: Row(children: [
+              ProjectAvatar(project: p, size: depth == 0 ? 34 : 28),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p?.name ?? widget.noneLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  if (hint != null)
+                    Text(hint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: C.muted, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+              if (selected) Icon(PhosphorIconsBold.check, color: C.accent2, size: 18),
+            ]),
+          ),
         ),
       );
     }
@@ -90,21 +94,15 @@ class _ProjectPickerState extends State<_ProjectPicker> {
     final rows = <Widget>[];
     if (query.isEmpty) {
       rows.add(row(null));
-      for (final p in store.rootProjects) {
-        if (p.id == widget.excludeId) continue;
-        rows.add(row(p));
-        if (!widget.rootsOnly) {
-          for (final c in store.childrenOf(p.id)) {
-            rows.add(row(c, nested: true));
-          }
-        }
+      for (final (p, depth) in store.projectTree()) {
+        rows.add(row(p, depth: depth));
       }
     } else {
       for (final p in store.projects) {
-        if (p.id == widget.excludeId) continue;
-        if (widget.rootsOnly && p.parentId != null) continue;
         if (!p.name.toLowerCase().contains(query)) continue;
-        rows.add(row(p, hint: store.projectById(p.parentId)?.name));
+        if (widget.allow != null && !widget.allow!(p)) continue;
+        final path = store.ancestorsOf(p).map((x) => x.name).join(' › ');
+        rows.add(row(p, hint: path.isEmpty ? null : path));
       }
       if (rows.isEmpty) {
         rows.add(const Padding(

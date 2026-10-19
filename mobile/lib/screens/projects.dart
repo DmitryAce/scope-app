@@ -31,6 +31,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     super.dispose();
   }
 
+  /// Режим редактирования, как папки в Telegram: проекты покачиваются, их можно таскать.
+  void _startEditing() {
+    HapticFeedback.mediumImpact();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _reorder = true;
+      _q.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
@@ -60,13 +70,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     )
                   else ...[
                     IconButton(
-                      tooltip: 'Упорядочить',
-                      onPressed: roots.length < 2
-                          ? null
-                          : () => setState(() {
-                                _reorder = true;
-                                _q.clear();
-                              }),
+                      tooltip: 'Редактировать',
+                      onPressed: roots.isEmpty ? null : _startEditing,
                       icon: const Icon(PhosphorIconsRegular.arrowsDownUp, size: 23),
                     ),
                     IconButton(
@@ -109,11 +114,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(22, 4, 22, 10),
-                child: Text('Перетащите за ручку справа. Закреплённые всегда сверху.',
+                child: Text('Тащите за точки или удерживайте строку. Нажатие — меню проекта. '
+                    'Порядок меняется внутри своего уровня, закреплённые всегда сверху.',
                     style: TextStyle(color: C.muted, fontSize: 13)),
               ),
             ),
-            SliverToBoxAdapter(child: _ReorderList(projects: roots)),
+            const SliverToBoxAdapter(child: _EditTree()),
           ] else if (query.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(
@@ -140,11 +146,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               const SliverToBoxAdapter(child: SectionHeader('Мои проекты')),
               SliverToBoxAdapter(
                 child: Group(children: [
-                  for (final p in roots) ...[
-                    ProjectRow(project: p, count: store.openCount(p.id)),
-                    for (final c in store.childrenOf(p.id))
-                      ProjectRow(project: c, count: store.openCount(c.id), nested: true),
-                  ],
+                  for (final (p, depth) in store.projectTree())
+                    ProjectRow(project: p, count: store.openCount(p.id), depth: depth, onLongPress: _startEditing),
                 ]),
               ),
             ],
@@ -180,7 +183,11 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     }
     return Group(children: [
       for (final p in found)
-        ProjectRow(project: p, count: store.openCount(p.id), hint: store.projectById(p.parentId)?.name),
+        ProjectRow(
+          project: p,
+          count: store.openCount(p.id),
+          hint: p.parentId == null ? null : store.ancestorsOf(p).map((x) => x.name).join(' › '),
+        ),
     ]);
   }
 }
@@ -231,7 +238,7 @@ Future<void> showProjectActions(BuildContext context, Project p) {
             Navigator.pop(c);
             openProjectEditor(context, project: p);
           }),
-          if (p.parentId == null && !p.isArchived)
+          if (!p.isArchived && store.depthOf(p) < AppStore.maxProjectLevels - 1)
             _SheetAction(PhosphorIconsRegular.folderSimplePlus, 'Добавить подпроект', () {
               Navigator.pop(c);
               openProjectEditor(context, parentId: p.id);
@@ -278,30 +285,37 @@ class ProjectRow extends StatelessWidget {
     super.key,
     required this.project,
     required this.count,
-    this.nested = false,
+    this.depth = 0,
     this.archived = false,
     this.hint,
+    this.onLongPress,
   });
 
   final Project? project;
   final int count;
-  final bool nested;
+  final int depth;
   final bool archived;
   final String? hint;
+
+  /// По умолчанию долгое нажатие открывает меню проекта.
+  final VoidCallback? onLongPress;
+
+  bool get nested => depth > 0;
 
   @override
   Widget build(BuildContext context) {
     final p = project;
     final store = StoreScope.of(context);
-    final subs = p == null || nested ? 0 : store.childrenOf(p.id).length;
+    final subs = p == null ? 0 : store.childrenOf(p.id).length;
     final subtitle = hint ?? (p == null ? 'Задачи без даты' : (subs > 0 ? '$subs ${_subs(subs)}' : null));
     return InkWell(
       onTap: () => openProject(context, p),
-      onLongPress: p == null ? null : () => showProjectActions(context, p),
+      onLongPress: p == null ? null : (onLongPress ?? () => showProjectActions(context, p)),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(nested ? 34 : 12, nested ? 8 : 10, 12, nested ? 8 : 10),
+        padding: EdgeInsets.fromLTRB(12.0 + depth * 22, nested ? 8 : 10, 12, nested ? 8 : 10),
         child: Row(children: [
           Opacity(opacity: archived ? 0.5 : 1, child: ProjectAvatar(project: p, size: nested ? 30 : 38)),
+
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -495,12 +509,20 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if (parent != null)
-                      GestureDetector(
-                        onTap: () => Navigator.pushReplacement(
-                            context, MaterialPageRoute(builder: (_) => ProjectScreen(projectId: parent.id))),
-                        child: Text(parent.name,
-                            style: const TextStyle(color: C.text2, fontWeight: FontWeight.w700, fontSize: 13)),
-                      ),
+                      // Полный путь: каждый уровень кликабелен.
+                      Wrap(children: [
+                        for (final (i, a) in store.ancestorsOf(p!).indexed) ...[
+                          if (i > 0)
+                            const Text(' › ',
+                                style: TextStyle(color: C.muted, fontWeight: FontWeight.w700, fontSize: 13)),
+                          GestureDetector(
+                            onTap: () => Navigator.pushReplacement(
+                                context, MaterialPageRoute(builder: (_) => ProjectScreen(projectId: a.id))),
+                            child: Text(a.name,
+                                style: const TextStyle(color: C.text2, fontWeight: FontWeight.w700, fontSize: 13)),
+                          ),
+                        ],
+                      ]),
                     Text(isInbox ? 'Входящие' : (p?.name ?? 'Проект'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -518,7 +540,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
                 child: Text(p.description, style: const TextStyle(color: C.text2)),
               ),
-            if (p != null && p.parentId == null) ...[
+            if (p != null && (children.isNotEmpty || store.depthOf(p) < AppStore.maxProjectLevels - 1)) ...[
               SectionHeader(
                 'Подпроекты',
                 count: children.isEmpty ? null : children.length,
@@ -535,7 +557,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
               else
                 Group(children: [
                   for (final c in children) ProjectRow(project: c, count: store.openCount(c.id)),
-                  InkWell(
+                  if (store.depthOf(p) < AppStore.maxProjectLevels - 1)
+                    InkWell(
                     onTap: () => openProjectEditor(context, parentId: p.id),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -671,8 +694,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       context,
       title: 'Внутри проекта',
       selectedId: _parentId,
-      rootsOnly: true,
-      excludeId: widget.project?.id,
+      allow: (x) => StoreScope.read(context).canNestUnder(x, widget.project),
       noneLabel: 'Отдельный проект',
     );
     if (v != null) setState(() => _parentId = v == 0 ? null : v);
@@ -748,7 +770,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final p = widget.project;
-    final hasChildren = p != null && store.childrenOf(p.id).isNotEmpty;
+
     final parent = store.projectById(_parentId);
     final preview = Project(
       id: p?.id ?? -1,
@@ -876,7 +898,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         const SizedBox(height: 18),
         Group(children: [
           InkWell(
-            onTap: hasChildren ? null : _pickParent,
+            onTap: _pickParent,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
               child: Row(children: [
@@ -887,7 +909,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 if (parent != null) ...[ProjectAvatar(project: parent, size: 22), const SizedBox(width: 8)],
                 Flexible(
                   child: Text(
-                    hasChildren ? 'есть подпроекты' : (parent?.name ?? 'Отдельно'),
+                    parent?.name ?? 'Отдельно',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -897,10 +919,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                     ),
                   ),
                 ),
-                if (!hasChildren) ...[
-                  const SizedBox(width: 6),
-                  const Icon(PhosphorIconsBold.caretRight, size: 13, color: C.muted),
-                ],
+                const SizedBox(width: 6),
+                const Icon(PhosphorIconsBold.caretRight, size: 13, color: C.muted),
               ]),
             ),
           ),
@@ -929,6 +949,107 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
           ]),
         ],
       ]),
+    );
+  }
+}
+
+/// Режим редактирования списка проектов: всё дерево покачивается, строки можно
+/// таскать за точки или удержанием, нажатие открывает меню проекта.
+/// Порядок меняется внутри своего уровня — среди «братьев» по родителю.
+class _EditTree extends StatefulWidget {
+  const _EditTree();
+
+  @override
+  State<_EditTree> createState() => _EditTreeState();
+}
+
+class _EditTreeState extends State<_EditTree> with SingleTickerProviderStateMixin {
+  late final _wiggle = AnimationController(vsync: this, duration: const Duration(milliseconds: 240))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _wiggle.dispose();
+    super.dispose();
+  }
+
+  void _onReorder(List<(Project, int)> tree, int from, int to) {
+    if (to > from) to--;
+    if (from == to) return;
+    final list = [...tree];
+    final moved = list.removeAt(from);
+    list.insert(to, moved);
+    // Новый порядок «братьев» перемещённого проекта — как они встали в списке.
+    final siblings = [for (final (p, _) in list) if (p.parentId == moved.$1.parentId) p.id];
+    HapticFeedback.selectionClick();
+    StoreScope.read(context).reorderProjects(siblings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final tree = store.projectTree();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(color: C.bg2, borderRadius: BorderRadius.circular(18)),
+      clipBehavior: Clip.antiAlias,
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        itemCount: tree.length,
+        onReorderStart: (_) => HapticFeedback.mediumImpact(),
+        proxyDecorator: (child, _, __) => Material(
+          color: C.elevated,
+          elevation: 10,
+          borderRadius: BorderRadius.circular(14),
+          child: child,
+        ),
+        onReorder: (from, to) => _onReorder(tree, from, to),
+        itemBuilder: (context, i) {
+          final (p, depth) = tree[i];
+          final row = InkWell(
+            onTap: () => showProjectActions(context, p),
+            child: Container(
+              decoration: BoxDecoration(
+                border: i == 0 ? null : const Border(top: BorderSide(color: C.border, width: 0.6)),
+              ),
+              padding: EdgeInsets.fromLTRB(12.0 + depth * 22, 8, 4, 8),
+              child: Row(children: [
+                ProjectAvatar(project: p, size: depth == 0 ? 34 : 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: depth == 0 ? 15 : 14, fontWeight: FontWeight.w700)),
+                ),
+                if (p.isPinned) Icon(PhosphorIconsFill.pushPin, size: 15, color: C.accent2),
+                ReorderableDragStartListener(
+                  index: i,
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(PhosphorIconsBold.dotsSixVertical, size: 20, color: C.text2),
+                  ),
+                ),
+              ]),
+            ),
+          );
+          return ReorderableDelayedDragStartListener(
+            key: ValueKey(p.id),
+            index: i,
+            child: AnimatedBuilder(
+              animation: _wiggle,
+              // Соседние строки качаются в противофазе — как иконки в режиме правки.
+              builder: (_, child) => Transform.rotate(
+                angle: (i.isEven ? 1 : -1) * (_wiggle.value - 0.5) * 0.014,
+                child: child,
+              ),
+              child: row,
+            ),
+          );
+        },
+      ),
     );
   }
 }

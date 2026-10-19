@@ -231,22 +231,14 @@ class _Sidebar extends StatelessWidget {
         ),
         Expanded(
           child: ListView(padding: const EdgeInsets.only(bottom: 8), children: [
-            for (final p in store.rootProjects) ...[
+            for (final (p, depth) in store.projectTree())
               _ProjectTile(
                 project: p,
                 count: store.openCount(p.id),
+                depth: depth,
                 selected: view == _View.project && projectId == p.id,
                 onTap: () => onGo(_View.project, project: p.id),
               ),
-              for (final c in store.childrenOf(p.id))
-                _ProjectTile(
-                  project: c,
-                  count: store.openCount(c.id),
-                  nested: true,
-                  selected: view == _View.project && projectId == c.id,
-                  onTap: () => onGo(_View.project, project: c.id),
-                ),
-            ],
           ]),
         ),
         const Divider(height: 1, color: C.borderLight),
@@ -313,19 +305,21 @@ class _ProjectTile extends StatelessWidget {
     required this.count,
     required this.selected,
     required this.onTap,
-    this.nested = false,
+    this.depth = 0,
   });
 
   final Project project;
   final int count;
   final bool selected;
-  final bool nested;
+  final int depth;
   final VoidCallback onTap;
+
+  bool get nested => depth > 0;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(nested ? 26 : 10, 1, 10, 1),
+      padding: EdgeInsets.fromLTRB(10.0 + depth * 16, 1, 10, 1),
       child: Material(
         color: selected ? C.accent.withValues(alpha: 0.14) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),

@@ -56,14 +56,20 @@ class TaskTile extends StatelessWidget {
             maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: metaStyle(metaColor)),
       ));
     }
-    final tag = task.tagIds.map(store.tagById).whereType<Tag>().firstOrNull;
-    if (tag != null) {
+    // Все теги в одну строку, каждый своим цветом; что не влезло — обрезается «…».
+    final tags = task.tagIds.map(store.tagById).whereType<Tag>().toList();
+    if (tags.isNotEmpty) {
       parts.add(Flexible(
-        child: Text('#${tag.name}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
-            style: metaStyle(done ? C.muted : tag.tint)),
+        flex: 2,
+        child: Text.rich(
+          TextSpan(children: [
+            for (final (i, t) in tags.indexed)
+              TextSpan(text: '${i == 0 ? '' : '  '}#${t.name}', style: metaStyle(done ? C.muted : t.tint)),
+          ]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+        ),
       ));
     }
     if (task.checklist.isNotEmpty) {

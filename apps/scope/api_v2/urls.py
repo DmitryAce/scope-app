@@ -5,6 +5,7 @@ from apps.scope.api_v2 import views as v2
 urlpatterns = [
     path('', v2.root, name='api_v2_root'),
     path('me/', v2.me, name='api_v2_me'),
+    path('app/latest/', v2.app_latest, name='api_v2_app_latest'),
     path('auth/login/', v2.auth_login, name='api_v2_auth_login'),
     path('auth/logout/', v2.auth_logout, name='api_v2_auth_logout'),
     path('housekeeping/', v2.housekeeping, name='api_v2_housekeeping'),

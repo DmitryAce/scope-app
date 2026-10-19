@@ -83,8 +83,29 @@ def _parse_reminder(s):
     raise ValueError('reminder must be YYYY-MM-DD HH:MM')
 
 
+# Уровней всего: проект → подпроект → под-подпроект → под-под-подпроект.
+PROJECT_MAX_LEVELS = 4
+
+
+def _depth(project) -> int:
+    """0 — проект верхнего уровня."""
+    d, cur = 0, project
+    while cur.parent_id:
+        cur = cur.parent
+        d += 1
+        if d > 50:  # защита от испорченных данных с циклом
+            break
+    return d
+
+
+def _subtree_height(project) -> int:
+    """Сколько уровней под проектом (0 — нет подпроектов)."""
+    children = list(project.children.all())
+    return 1 + max(_subtree_height(c) for c in children) if children else 0
+
+
 def _resolve_parent(user, project, raw):
-    """Родитель проекта: только свой, без циклов и глубже одного уровня."""
+    """Родитель проекта: только свой, без циклов и не глубже PROJECT_MAX_LEVELS уровней."""
     if raw in (None, ''):
         return None
     try:
@@ -95,13 +116,16 @@ def _resolve_parent(user, project, raw):
         parent = Project.objects.get(pk=pid, user=user)
     except Project.DoesNotExist:
         raise ValueError('Родительский проект не найден')
+    height = 0
     if project is not None:
-        if parent.pk == project.pk:
-            raise ValueError('Проект не может быть родителем сам себе')
-        if project.children.exists():
-            raise ValueError('У проекта есть подпроекты — его нельзя вложить')
-    if parent.parent_id:
-        raise ValueError('Подпроекты бывают только одного уровня')
+        cur = parent
+        while cur is not None:
+            if cur.pk == project.pk:
+                raise ValueError('Нельзя вложить проект в самого себя или в свой подпроект')
+            cur = cur.parent
+        height = _subtree_height(project)
+    if _depth(parent) + 1 + height > PROJECT_MAX_LEVELS - 1:
+        raise ValueError(f'Вложенность — не больше {PROJECT_MAX_LEVELS} уровней')
     return parent
 
 
@@ -687,3 +711,46 @@ def tag_detail(request, pk: int):
         tag.color = str(data['color'])[:7]
     tag.save()
     return JsonResponse({'data': tag_to_dict(tag)})
+
+
+# ---------- обновления приложения ----------
+# Сборки лежат в MEDIA_ROOT/app_releases/, описание последних — в latest.json.
+# Публикуются командой `manage.py scope_publish_app`.
+
+APP_PLATFORMS = ('android', 'windows')
+
+
+def app_releases_dir():
+    from pathlib import Path
+
+    from django.conf import settings
+
+    return Path(settings.MEDIA_ROOT) / 'app_releases'
+
+
+def read_app_manifest() -> dict:
+    path = app_releases_dir() / 'latest.json'
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
+@v2
+@require_GET
+def app_latest(request):
+    """Последняя опубликованная сборка: ?platform=android|windows."""
+    from django.conf import settings
+
+    platform = request.GET.get('platform', '')
+    if platform not in APP_PLATFORMS:
+        return _json_error('validation_error', f'platform: {", ".join(APP_PLATFORMS)}')
+    entry = read_app_manifest().get(platform)
+    if not entry:
+        return JsonResponse({'data': None})
+    return JsonResponse({
+        'data': {
+            **entry,
+            'url': f"{settings.MEDIA_URL}app_releases/{entry['file']}",
+        }
+    })

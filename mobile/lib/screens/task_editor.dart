@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -57,6 +59,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
   @override
   void dispose() {
+    _typing?.cancel();
     // В панели задачу могли сменить кликом по другой — сохраняем молча.
     if (_embedded && !_closed) _autosave(silent: true);
     _title.dispose();
@@ -64,6 +67,16 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     _newItem.dispose();
     _newItemFocus.dispose();
     super.dispose();
+  }
+
+  Timer? _typing;
+
+  /// Название и заметку сохраняем, когда перестали печатать.
+  void _typed() {
+    _dirty = true;
+    if (_isNew) return;
+    _typing?.cancel();
+    _typing = Timer(const Duration(milliseconds: 900), () => _autosave(silent: true));
   }
 
   void _sync() {
@@ -74,7 +87,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
   Future<void> _pick(Future<bool> Function(BuildContext, TaskDraft) picker) async {
     _sync();
-    if (await picker(context, d) && mounted) setState(() => _dirty = true);
+    if (await picker(context, d) && mounted) {
+      setState(() => _dirty = true);
+      // Изменение сразу уходит на сервер — список за панелью обновляется тут же.
+      _autosave();
+    }
   }
 
   /// Выход с экрана: существующую задачу молча сохраняем.
@@ -213,7 +230,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                     autofocus: _isNew && d.title.isEmpty,
                     maxLines: null,
                     textCapitalization: TextCapitalization.sentences,
-                    onChanged: (_) => _dirty = true,
+                    onChanged: (_) => _typed(),
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -232,7 +249,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 minLines: 1,
                 maxLines: null,
                 textCapitalization: TextCapitalization.sentences,
-                onChanged: (_) => _dirty = true,
+                onChanged: (_) => _typed(),
                 style: const TextStyle(fontSize: 15, color: C.text2, height: 1.45),
                 decoration: _bare('Заметка'),
               ),
@@ -312,6 +329,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                     : () => setState(() {
                           d.time = null;
                           _dirty = true;
+                          _autosave();
                         }),
               ),
               _Field(
@@ -366,6 +384,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   d.autoComplete = v;
                   if (v) d.autoDelete = false;
                   _dirty = true;
+                  _autosave();
                 }),
               ),
               SwitchListTile(
@@ -381,6 +400,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   d.autoDelete = v;
                   if (v) d.autoComplete = false;
                   _dirty = true;
+                  _autosave();
                 }),
               ),
             ]),

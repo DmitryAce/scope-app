@@ -7,6 +7,8 @@ import '../api.dart';
 import '../notifications.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../updater.dart';
+import '../widgets/update_dialog.dart';
 import 'tags.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -80,6 +82,19 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
             ]),
+          ),
+        ]),
+        const SectionHeader('Приложение'),
+        _Card(children: [
+          FutureBuilder<String>(
+            future: Updater.currentLabel(),
+            builder: (context, snap) => ListTile(
+              leading: Icon(PhosphorIconsRegular.downloadSimple, color: C.accent2),
+              title: const Text('Проверить обновления', style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('Версия ${snap.data ?? '…'}', style: const TextStyle(color: C.text2)),
+              trailing: const Icon(PhosphorIconsBold.caretRight, size: 14, color: C.muted),
+              onTap: () => showUpdateDialog(context),
+            ),
           ),
         ]),
         const SectionHeader('Организация'),
@@ -182,7 +197,7 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Center(child: Text('Scope · 1.3', style: TextStyle(color: C.muted, fontSize: 12))),
+
       ],
     );
   }

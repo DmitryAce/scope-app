@@ -77,19 +77,36 @@ class Pick {
   static Future<bool> day(BuildContext context, TaskDraft d) async {
     final today = dayOnly(DateTime.now());
     final monday = today.add(Duration(days: 8 - today.weekday));
-    final v = await choose<String>(context, 'Когда', [
-      ('today', 'Сегодня', PhosphorIconsRegular.sun, C.high),
-      ('tomorrow', 'Завтра', PhosphorIconsRegular.sunHorizon, C.accent2),
-      ('monday', 'В понедельник · ${fmtShortDay(monday)}', PhosphorIconsRegular.calendarPlus, C.medium),
-      ('pick', 'Выбрать дату…', PhosphorIconsRegular.calendarBlank, C.text2),
-      ('none', 'Без даты', PhosphorIconsRegular.tray, C.muted),
-    ]);
+    // Результат: дата из полосы недели или код пункта списка.
+    final v = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => _SheetFrame(title: 'Когда', children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+          child: WeekDayPicker(current: d.date, onPick: (day) => Navigator.pop(c, day)),
+        ),
+        for (final (value, label, icon, color) in [
+          ('monday', 'Следующий понедельник · ${fmtShortDay(monday)}', PhosphorIconsRegular.calendarPlus, C.medium),
+          ('pick', 'Выбрать дату…', PhosphorIconsRegular.calendarBlank, C.text2),
+          ('none', 'Без даты', PhosphorIconsRegular.tray, C.muted),
+        ])
+          ListTile(
+            leading: Icon(icon, color: color, size: 22),
+            title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            trailing: value == 'none' && d.date == null
+                ? Icon(PhosphorIconsBold.check, color: C.accent2, size: 18)
+                : null,
+            onTap: () => Navigator.pop(c, value),
+          ),
+      ]),
+    );
     if (v == null || !context.mounted) return false;
+    if (v is DateTime) {
+      d.date = v;
+      return true;
+    }
     switch (v) {
-      case 'today':
-        d.date = today;
-      case 'tomorrow':
-        d.date = today.add(const Duration(days: 1));
       case 'monday':
         d.date = monday;
       case 'none':
@@ -378,6 +395,80 @@ class _SheetFrame extends StatelessWidget {
           Flexible(child: ListView(shrinkWrap: true, children: children)),
           footer ?? const SizedBox(height: 8),
         ]),
+      ),
+    );
+  }
+}
+
+
+/// Семь квадратиков от сегодня: день недели и число. Текущий срок обведён.
+class WeekDayPicker extends StatelessWidget {
+  const WeekDayPicker({super.key, required this.current, required this.onPick});
+
+  final DateTime? current;
+  final ValueChanged<DateTime> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = dayOnly(DateTime.now());
+    final cur = current == null ? null : dayOnly(current!);
+    return Row(children: [
+      for (var i = 0; i < 7; i++)
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: _DaySquare(
+              day: today.add(Duration(days: i)),
+              isToday: i == 0,
+              selected: cur == today.add(Duration(days: i)),
+              onTap: () => onPick(today.add(Duration(days: i))),
+            ),
+          ),
+        ),
+    ]);
+  }
+}
+
+class _DaySquare extends StatelessWidget {
+  const _DaySquare({required this.day, required this.isToday, required this.selected, required this.onTap});
+
+  final DateTime day;
+  final bool isToday;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekend = day.weekday >= 6;
+    return Material(
+      color: selected ? C.accent.withValues(alpha: 0.16) : C.bg3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: selected ? C.accent2 : Colors.transparent, width: 2),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: SizedBox(
+          height: 64,
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(
+              isToday ? 'Сег' : fmtShortWeekday(day),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isToday ? C.accent2 : (weekend ? C.logo.withValues(alpha: 0.95) : C.muted),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text('${day.day}',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: selected ? C.text : C.text,
+                )),
+          ]),
+        ),
       ),
     );
   }

@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/task_sheet.dart';
+import '../updater.dart';
 import '../widgets/desktop.dart';
+import '../widgets/update_dialog.dart';
 import 'calendar.dart';
 import 'desktop_shell.dart';
 import 'projects.dart';
@@ -32,6 +34,28 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdates());
+  }
+
+  /// Раз за запуск тихо спросить сервер о новой версии и подсказать снекбаром.
+  static bool _updateChecked = false;
+
+  Future<void> _checkUpdates() async {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    await Future<void>.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+    try {
+      final u = await Updater.check(StoreScope.read(context));
+      if (u == null || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text('Доступна версия ${u.version}'),
+        action: SnackBarAction(label: 'Обновить', onPressed: () => showUpdateDialog(context, known: u)),
+      ));
+    } catch (_) {
+      // Нет сети или старый сервер — молча, проверить можно вручную в «Ещё».
+    }
   }
 
   @override

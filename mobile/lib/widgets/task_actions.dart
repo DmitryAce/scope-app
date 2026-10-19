@@ -125,13 +125,15 @@ class _TaskActions extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(children: [
-              _DateTile(PhosphorIconsRegular.sun, 'Сегодня', C.high, () => moveTo(today)),
-              _DateTile(PhosphorIconsRegular.sunHorizon, 'Завтра', C.accent2,
-                  () => moveTo(today.add(const Duration(days: 1)))),
-              _DateTile(PhosphorIconsRegular.calendarPlus, 'Пн, ${nextMonday.day}', C.medium, () => moveTo(nextMonday)),
-              _DateTile(PhosphorIconsRegular.calendarDots, 'Дата…', C.text2, pickDate),
-              _DateTile(PhosphorIconsRegular.tray, 'Без даты', C.muted, () => moveTo(null)),
+            child: Column(children: [
+              WeekDayPicker(current: t.dueDate, onPick: moveTo),
+              const SizedBox(height: 8),
+              Row(children: [
+                _DateTile(PhosphorIconsRegular.calendarPlus, 'След. пн, ${nextMonday.day}', C.medium,
+                    () => moveTo(nextMonday)),
+                _DateTile(PhosphorIconsRegular.calendarDots, 'Дата…', C.text2, pickDate),
+                _DateTile(PhosphorIconsRegular.tray, 'Без даты', C.muted, () => moveTo(null)),
+              ]),
             ]),
           ),
           const SizedBox(height: 14),
