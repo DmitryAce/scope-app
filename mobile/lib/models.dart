@@ -125,6 +125,14 @@ class Task {
   final List<int> tagIds;
   final List<ChecklistItem> checklist;
 
+  /// Задача из ERP: 'webstead' / 'omniwebers' или пусто. Закрытие в Scope — только локальное.
+  final String externalSource;
+  final String externalCode;
+  final String externalUrl;
+  final String externalStatus;
+
+  bool get isExternal => externalSource.isNotEmpty;
+
   const Task({
     required this.id,
     required this.title,
@@ -143,6 +151,10 @@ class Task {
     this.order = 0,
     this.tagIds = const [],
     this.checklist = const [],
+    this.externalSource = '',
+    this.externalCode = '',
+    this.externalUrl = '',
+    this.externalStatus = '',
   });
 
   bool get isOverdue {
@@ -200,6 +212,10 @@ class Task {
         order: order,
         tagIds: tagIds,
         checklist: checklist,
+        externalSource: externalSource,
+        externalCode: externalCode,
+        externalUrl: externalUrl,
+        externalStatus: externalStatus,
       );
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -222,6 +238,10 @@ class Task {
         checklist: ((j['checklist'] ?? const []) as List)
             .map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
             .toList(),
+        externalSource: (j['external_source'] ?? '') as String,
+        externalCode: (j['external_code'] ?? '') as String,
+        externalUrl: (j['external_url'] ?? '') as String,
+        externalStatus: (j['external_status'] ?? '') as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -242,6 +262,10 @@ class Task {
         'order': order,
         'tag_ids': tagIds,
         'checklist': checklist.map((c) => c.toJson()).toList(),
+        'external_source': externalSource,
+        'external_code': externalCode,
+        'external_url': externalUrl,
+        'external_status': externalStatus,
       };
 }
 
@@ -254,4 +278,11 @@ const repeatLabels = {
   'weekly': 'Каждую неделю',
   'biweekly': 'Раз в две недели',
   'monthly': 'Каждый месяц',
+};
+
+
+/// Подписи и цвета источников ERP.
+const erpSources = {
+  'webstead': ('Webstead', 0xFFB3365B),
+  'omniwebers': ('OmniWebers', 0xFF06B6D4),
 };

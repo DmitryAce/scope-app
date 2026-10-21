@@ -150,6 +150,7 @@ class AppStore extends ChangeNotifier {
     try {
       if (reprobe) await api.resolve(force: true);
       await _housekeepingOnceADay();
+      await _pullErp();
       final today = dayOnly(DateTime.now());
       final results = await Future.wait([
         api.get('projects/'),
@@ -187,6 +188,25 @@ class AppStore extends ChangeNotifier {
       syncing = false;
       notifyListeners();
     }
+  }
+
+  /// Состояние подтягивания задач из ERP (null — сервер старый или ERP не настроена).
+  Map<String, dynamic>? erp;
+
+  /// Попросить сервер подтянуть задачи из ERP (он сам не ходит туда чаще раза в минуту).
+  Future<void> _pullErp({bool force = false}) async {
+    try {
+      final data = await api.post(force ? 'erp/sync/?force=1' : 'erp/sync/');
+      erp = (data as Map).cast<String, dynamic>();
+    } catch (_) {
+      // Старый сервер без эндпоинта или ERP недоступна — остальное работает как было.
+    }
+  }
+
+  /// Кнопка «Подтянуть сейчас» в настройках.
+  Future<void> syncErpNow() async {
+    await _pullErp(force: true);
+    await refresh(reprobe: false);
   }
 
   Future<void> _housekeepingOnceADay() async {

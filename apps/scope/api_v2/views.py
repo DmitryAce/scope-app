@@ -754,3 +754,51 @@ def app_latest(request):
             'url': f"{settings.MEDIA_URL}app_releases/{entry['file']}",
         }
     })
+
+
+
+# ---------- задачи из ERP ----------
+
+ERP_SYNC_COOLDOWN_SECONDS = 60
+
+
+def _erp_states(user) -> list[dict]:
+    from apps.scope.erp_sync import sources
+    from apps.scope.models import ErpSyncState
+
+    states = {s.source: s for s in ErpSyncState.objects.filter(user=user)}
+    out = []
+    for src in sources():
+        st = states.get(src.key)
+        out.append({
+            'source': src.key,
+            'name': src.name,
+            'last_run': st.last_run.isoformat() if st and st.last_run else None,
+            'open_tasks': st.open_tasks if st else 0,
+            'error': st.last_error if st else '',
+        })
+    return out
+
+
+@v2
+@require_http_methods(['GET', 'POST'])
+def erp_sync(request):
+    """GET — состояние синхронизации, POST — подтянуть задачи из ERP сейчас.
+
+    Работает только для владельца ERP-токенов (ERP_SYNC_USERNAME); чаще раза
+    в минуту в ERP не ходим — приложение дёргает это при каждом обновлении.
+    """
+    from apps.scope.erp_sync import sync_all, sync_user
+    from apps.scope.models import ErpSyncState
+
+    owner = sync_user()
+    if owner is None or owner.pk != request.user.pk:
+        return JsonResponse({'data': {'enabled': False, 'sources': []}})
+    ran = False
+    if request.method == 'POST':
+        last = ErpSyncState.objects.filter(user=owner).order_by('-last_run').values_list('last_run', flat=True).first()
+        force = request.GET.get('force') in ('1', 'true')
+        if force or last is None or (timezone.now() - last).total_seconds() > ERP_SYNC_COOLDOWN_SECONDS:
+            sync_all(owner)
+            ran = True
+    return JsonResponse({'data': {'enabled': True, 'ran': ran, 'sources': _erp_states(owner)}})

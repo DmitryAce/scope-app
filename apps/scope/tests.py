@@ -177,3 +177,71 @@ class AppReleaseTests(TestCase):
             self.assertEqual((data['version'], data['build'], data['notes']), ('1.4.0', 5, 'Подпроекты'))
             self.assertTrue(data['url'].endswith('/app_releases/Scope-1.4.0-android.apk'))
             self.assertEqual(self.client.get('/api/v2/app/latest/?platform=ios', **auth).status_code, 400)
+
+
+class ErpSyncTests(TestCase):
+    """Синхронизация на поддельной ERP: только чтение, закрытие в Scope — локальное."""
+
+    def setUp(self):
+        from apps.scope.erp_sync import Source
+
+        self.user = User.objects.create_user('xeno', password='x')
+        self.source = Source('webstead', 'Webstead', 'https://erp.example', 'tok', '#8B2942')
+        self.erp = [self._item(109, 'Чистка ERP', '2026-11-05'), self._item(423, 'Контроль оплаты', None, 'urgent')]
+
+    @staticmethod
+    def _item(i, title, deadline, priority='normal'):
+        return {
+            'id': i, 'code': f'ERP ДТ-{i}', 'title': title, 'description': 'описание', 'deadline': deadline,
+            'url': f'https://erp.example/t/{i}', 'priority': {'code': priority},
+            'status': {'label': 'В работе'}, 'project': {'id': 1, 'name': 'ERP Дверной Тон'},
+        }
+
+    def _sync(self):
+        from apps.scope.erp_sync import sync_source
+
+        return sync_source(self.user, self.source, opener=lambda url, token: {'tasks': self.erp, 'has_more': False})
+
+    def test_import_update_and_local_close(self):
+        from datetime import date
+
+        from apps.scope.models import Task
+
+        self.assertEqual(self._sync()['created'], 2)
+        t = Task.objects.get(external_id='109')
+        self.assertEqual((t.title, t.external_code, t.due_date), ('Чистка ERP', 'ERP ДТ-109', date(2026, 11, 5)))
+        self.assertEqual(t.project.name, 'ERP Дверной Тон')
+        self.assertEqual(t.project.parent.name, 'ERP · Webstead')
+        self.assertEqual(Task.objects.get(external_id='423').priority, 4)
+
+        # Свой перенос и своё закрытие не затираются, пока в ERP не менялся срок.
+        Task.objects.filter(pk=t.pk).update(due_date=date(2026, 11, 1), is_completed=True)
+        self.erp[0]['title'] = 'Чистка ERP v2'
+        self.assertEqual(self._sync()['created'], 0)
+        t.refresh_from_db()
+        self.assertEqual((t.title, t.due_date, t.is_completed), ('Чистка ERP v2', date(2026, 11, 1), True))
+
+        # Срок сдвинули в ERP — он приезжает.
+        self.erp[0]['deadline'] = '2026-12-01'
+        self._sync()
+        t.refresh_from_db()
+        self.assertEqual(t.due_date, date(2026, 12, 1))
+
+        # Задачу закрыли в ERP (пропала из открытых) — закрывается и в Scope.
+        self.erp.pop(1)
+        self.assertEqual(self._sync()['closed'], 1)
+        self.assertTrue(Task.objects.get(external_id='423').is_completed)
+        self.assertEqual(Task.objects.filter(external_source='webstead').count(), 2)
+
+    def test_network_error_changes_nothing(self):
+        from apps.scope.erp_sync import sync_source
+        from apps.scope.models import ErpSyncState, Task
+
+        self._sync()
+
+        def broken(url, token):
+            raise OSError('сеть')
+
+        self.assertIn('error', sync_source(self.user, self.source, opener=broken))
+        self.assertFalse(Task.objects.filter(is_completed=True).exists())
+        self.assertEqual(ErpSyncState.objects.get().last_error, 'сеть')

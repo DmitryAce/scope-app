@@ -40,6 +40,9 @@ class Project(models.Model):
     # Ручной порядок и закрепление: закреплённые всегда сверху.
     is_pinned = models.BooleanField(default=False)
     position = models.IntegerField(default=0)
+    # Проект, заведённый синхронизацией ERP: источник и его id проекта (или 'root').
+    external_source = models.CharField(max_length=20, blank=True, default='')
+    external_id = models.CharField(max_length=64, blank=True, default='')
     
     class Meta:
         ordering = ['-is_pinned', 'position', '-created_at']
@@ -79,6 +82,16 @@ class Task(models.Model):
     auto_complete = models.BooleanField(default=False)
     # Одноразовое на день: прошёл день — задача исчезает совсем, не копится в истории.
     auto_delete = models.BooleanField(default=False)
+
+    # Задача из ERP (Webstead / OmniWebers). Закрытие в Scope — только локальное,
+    # в ERP ничего не уходит. external_deadline — срок из ERP на момент последней
+    # синхронизации: due_date перезаписываем, только если в ERP срок поменяли.
+    external_source = models.CharField(max_length=20, blank=True, default='')
+    external_id = models.CharField(max_length=64, blank=True, default='')
+    external_code = models.CharField(max_length=50, blank=True, default='')
+    external_url = models.URLField(max_length=500, blank=True, default='')
+    external_status = models.CharField(max_length=100, blank=True, default='')
+    external_deadline = models.DateField(null=True, blank=True)
     
     due_date = models.DateField(null=True, blank=True)
     due_time = models.TimeField(null=True, blank=True)
@@ -535,3 +548,20 @@ class BulletTaskCompletion(models.Model):
 
     def __str__(self):
         return f'{self.bullet_task.title} {self.day}'
+
+
+
+class ErpSyncState(models.Model):
+    """Как прошла последняя синхронизация с ERP — для экрана настроек."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='erp_sync_states')
+    source = models.CharField(max_length=20)
+    last_run = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default='')
+    open_tasks = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = [('user', 'source')]
+
+    def __str__(self):
+        return f'{self.user} · {self.source}'

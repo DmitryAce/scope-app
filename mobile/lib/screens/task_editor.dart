@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
 import '../store.dart';
@@ -254,6 +255,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 decoration: _bare('Заметка'),
               ),
             ),
+
+            if (live != null && live.isExternal) _ErpBanner(task: live),
 
             // ---- чек-лист ----
             SectionHeader(
@@ -582,6 +585,48 @@ class _ItemRowState extends State<_ItemRow> {
           onPressed: widget.onDelete,
           icon: const Icon(PhosphorIconsRegular.x, size: 16, color: C.muted),
         ),
+      ]),
+    );
+  }
+}
+
+
+/// Задача из ERP: код, статус там и ссылка. Отметка «готово» в Scope — только своя.
+class _ErpBanner extends StatelessWidget {
+  const _ErpBanner({required this.task});
+
+  final Task task;
+
+  @override
+  Widget build(BuildContext context) {
+    final (name, argb) = erpSources[task.externalSource] ?? ('ERP', 0xFF9090A0);
+    final color = Color(argb);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$name · ${task.externalCode}',
+                style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 13.5)),
+            if (task.externalStatus.isNotEmpty)
+              Text('В ERP: ${task.externalStatus}', style: const TextStyle(color: C.text2, fontSize: 13)),
+            const SizedBox(height: 2),
+            const Text('Галочка здесь закрывает задачу только в Scope. Название, описание и срок приходят из ERP.',
+                style: TextStyle(color: C.muted, fontSize: 11.5, height: 1.3)),
+          ]),
+        ),
+        if (task.externalUrl.isNotEmpty)
+          TextButton.icon(
+            onPressed: () => launchUrl(Uri.parse(task.externalUrl), mode: LaunchMode.externalApplication),
+            icon: Icon(PhosphorIconsRegular.arrowSquareOut, size: 17, color: color),
+            label: Text('Открыть', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+          ),
       ]),
     );
   }

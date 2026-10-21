@@ -37,6 +37,20 @@ class TaskTile extends StatelessWidget {
 
     // Мета — строго в одну строку: длинное (проект, тег) обрезается.
     final parts = <Widget>[];
+    if (task.isExternal && task.externalCode.isNotEmpty) {
+      // Код задачи ERP — сразу видно, откуда она и как её найти там.
+      final color = Color(erpSources[task.externalSource]?.$2 ?? 0xFF9090A0);
+      parts.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: done ? 0.08 : 0.16),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(task.externalCode,
+            maxLines: 1,
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: done ? C.muted : color)),
+      ));
+    }
     if (showDate && task.dueDate != null) {
       parts.add(Text(fmtShortDay(task.dueDate!), style: metaStyle(task.isOverdue ? C.urgent : metaColor)));
     }

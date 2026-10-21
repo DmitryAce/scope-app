@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../api.dart';
+import '../models.dart';
 import '../notifications.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -97,6 +98,32 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ]),
+        if (store.erp?['enabled'] == true) ...[
+          const SectionHeader('Задачи из ERP'),
+          _Card(children: [
+            for (final src in (store.erp!['sources'] as List).cast<Map>())
+              ListTile(
+                leading: Icon(PhosphorIconsRegular.briefcase,
+                    color: Color(erpSources[src['source']]?.$2 ?? 0xFF9090A0)),
+                title: Text('${src['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                  (src['error'] as String? ?? '').isNotEmpty
+                      ? 'Ошибка: ${src['error']}'
+                      : src['last_run'] == null
+                          ? 'Ещё не синхронизировалось'
+                          : '${src['open_tasks']} открытых · ${DateFormat('d MMM, HH:mm', 'ru').format(DateTime.parse(src['last_run']).toLocal())}',
+                  style: TextStyle(color: (src['error'] as String? ?? '').isNotEmpty ? C.urgent : C.text2),
+                ),
+              ),
+            ListTile(
+              leading: Icon(PhosphorIconsRegular.arrowsClockwise, color: C.accent2),
+              title: const Text('Подтянуть сейчас', style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('Сервер и сам забирает задачи раз в 5 минут. Закрытие в Scope в ERP не уходит.',
+                  style: TextStyle(color: C.muted, fontSize: 12)),
+              onTap: store.syncing ? null : store.syncErpNow,
+            ),
+          ]),
+        ],
         const SectionHeader('Организация'),
         _Card(children: [
           ListTile(

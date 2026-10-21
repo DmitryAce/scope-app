@@ -15,6 +15,7 @@ def project_to_dict(p: Project) -> dict:
         'is_archived': p.is_archived,
         'parent_id': p.parent_id,
         'is_pinned': p.is_pinned,
+        'external_source': p.external_source,
         'position': p.position,
         # Относительный путь: клиент сам подставляет сервер (дом или интернет).
         'avatar': p.avatar.url if p.avatar else None,
@@ -44,6 +45,10 @@ def task_to_dict(task: Task) -> dict:
         'is_completed': task.is_completed,
         'auto_complete': task.auto_complete,
         'auto_delete': task.auto_delete,
+        'external_source': task.external_source,
+        'external_code': task.external_code,
+        'external_url': task.external_url,
+        'external_status': task.external_status,
         'completed_at': task.completed_at.isoformat() if task.completed_at else None,
         'due_date': task.due_date.isoformat() if task.due_date else None,
         'due_time': due_time,
