@@ -37,6 +37,9 @@ class AppStore extends ChangeNotifier {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // На Windows при некоторых запусках (из «Пуска») настройки приходят пустыми,
+    // хотя файл на месте. Тогда читаем его сами по %APPDATA% и восстанавливаем.
+    final restored = await Session.restorePrefsIfEmpty(_prefs);
     var token = _prefs.getString('token');
     username = _prefs.getString('username');
     var source = token != null ? 'prefs' : 'none';
@@ -56,7 +59,7 @@ class AppStore extends ChangeNotifier {
       final (backupToken, _) = await Session.readBackup();
       if (backupToken != token) await Session.save(token, username ?? '');
     }
-    Session.log('start: keys=${_prefs.getKeys().length} token=$source');
+    Session.log('start: keys=${_prefs.getKeys().length} token=$source${restored ? ' (prefs restored from file)' : ''}');
     api = ScopeApi(
       localUrl: _prefs.getString('local_url') ?? defaultLocalUrl,
       remoteUrl: _prefs.getString('remote_url') ?? defaultRemoteUrl,
@@ -89,6 +92,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    Session.log('logout');
     try {
       await api.post('auth/logout/');
     } catch (_) {}
