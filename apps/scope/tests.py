@@ -180,13 +180,16 @@ class AppReleaseTests(TestCase):
 
 
 class ErpSyncTests(TestCase):
-    """Синхронизация на поддельной ERP: только чтение, закрытие в Scope — локальное."""
+    """Подключения ERP: у каждого пользователя свои, только чтение, закрытие в Scope — локальное."""
 
     def setUp(self):
-        from apps.scope.erp_sync import Source
+        from apps.scope.models import ErpConnection
 
         self.user = User.objects.create_user('xeno', password='x')
-        self.source = Source('webstead', 'Webstead', 'https://erp.example', 'tok', '#8B2942')
+        self.conn = ErpConnection(user=self.user, source='webstead', name='Webstead',
+                                  base_url='https://erp.example', color='#B3365B')
+        self.conn.token = 'tok-xeno'
+        self.conn.save()
         self.erp = [self._item(109, 'Чистка ERP', '2026-11-05'), self._item(423, 'Контроль оплаты', None, 'urgent')]
 
     @staticmethod
@@ -197,10 +200,21 @@ class ErpSyncTests(TestCase):
             'status': {'label': 'В работе'}, 'project': {'id': 1, 'name': 'ERP Дверной Тон'},
         }
 
-    def _sync(self):
-        from apps.scope.erp_sync import sync_source
+    def _opener(self, url, token):
+        assert token == 'tok-xeno', 'в ERP должен уходить токен владельца подключения'
+        return {'tasks': self.erp, 'has_more': False}
 
-        return sync_source(self.user, self.source, opener=lambda url, token: {'tasks': self.erp, 'has_more': False})
+    def _sync(self):
+        from apps.scope.erp_sync import sync_connection
+
+        return sync_connection(self.conn, opener=self._opener)
+
+    def test_token_is_encrypted_at_rest(self):
+        from apps.scope.models import ErpConnection
+
+        raw = ErpConnection.objects.values_list('token_encrypted', flat=True).get()
+        self.assertNotIn('tok-xeno', raw)
+        self.assertEqual(ErpConnection.objects.get().token, 'tok-xeno')
 
     def test_import_update_and_local_close(self):
         from datetime import date
@@ -210,8 +224,7 @@ class ErpSyncTests(TestCase):
         self.assertEqual(self._sync()['created'], 2)
         t = Task.objects.get(external_id='109')
         self.assertEqual((t.title, t.external_code, t.due_date), ('Чистка ERP', 'ERP ДТ-109', date(2026, 11, 5)))
-        self.assertEqual(t.project.name, 'ERP Дверной Тон')
-        self.assertEqual(t.project.parent.name, 'ERP · Webstead')
+        self.assertEqual((t.project.name, t.project.parent.name), ('ERP Дверной Тон', 'ERP · Webstead'))
         self.assertEqual(Task.objects.get(external_id='423').priority, 4)
 
         # Свой перенос и своё закрытие не затираются, пока в ERP не менялся срок.
@@ -231,17 +244,73 @@ class ErpSyncTests(TestCase):
         self.erp.pop(1)
         self.assertEqual(self._sync()['closed'], 1)
         self.assertTrue(Task.objects.get(external_id='423').is_completed)
-        self.assertEqual(Task.objects.filter(external_source='webstead').count(), 2)
 
     def test_network_error_changes_nothing(self):
-        from apps.scope.erp_sync import sync_source
-        from apps.scope.models import ErpSyncState, Task
+        from apps.scope.erp_sync import ErpError, sync_connection
+        from apps.scope.models import Task
 
         self._sync()
 
         def broken(url, token):
-            raise OSError('сеть')
+            raise ErpError('ERP недоступна')
 
-        self.assertIn('error', sync_source(self.user, self.source, opener=broken))
+        self.assertIn('error', sync_connection(self.conn, opener=broken))
         self.assertFalse(Task.objects.filter(is_completed=True).exists())
-        self.assertEqual(ErpSyncState.objects.get().last_error, 'сеть')
+        self.conn.refresh_from_db()
+        self.assertEqual(self.conn.last_error, 'ERP недоступна')
+
+    def test_users_are_isolated(self):
+        from apps.scope.erp_sync import sync_connection
+        from apps.scope.models import ErpConnection, Task
+
+        other = User.objects.create_user('anna', password='x')
+        conn = ErpConnection(user=other, source='webstead', name='Webstead', base_url='https://erp.example')
+        conn.token = 'tok-anna'
+        conn.save()
+        self._sync()
+        sync_connection(conn, opener=lambda url, token: {'tasks': [self._item(7, 'Задача Анны', None)], 'has_more': False})
+        self.assertEqual(sorted(Task.objects.filter(user=self.user).values_list('external_id', flat=True)), ['109', '423'])
+        self.assertEqual(list(Task.objects.filter(user=other).values_list('external_id', flat=True)), ['7'])
+
+    def test_connect_checks_token_and_host(self):
+        from apps.scope.erp_sync import ErpError, check_public_https, connect
+
+        for bad in ['http://erp.webstead.ru', 'https://127.0.0.1', 'https://192.168.1.93:1230', 'https://localhost']:
+            with self.assertRaises(ErpError):
+                check_public_https(bad)
+
+        def reject(url, token):
+            raise ErpError('ERP не приняла токен')
+
+        with self.assertRaises(ErpError):
+            connect(self.user, token='bad', preset='omniwebers', opener=reject, check_host=False)
+        conn = connect(self.user, token='good', preset='omniwebers', check_host=False,
+                       opener=lambda url, token: {'tasks': [], 'has_more': False})
+        self.assertEqual((conn.source, conn.name, conn.token), ('omniwebers', 'OmniWebers', 'good'))
+        custom = connect(self.user, token='t', base_url='https://erp.acme.example', name='Acme', check_host=False,
+                         opener=lambda url, token: {'tasks': [], 'has_more': False})
+        self.assertEqual(custom.source, f'erp-{custom.pk}')
+
+    def test_disconnect_close_or_delete(self):
+        from apps.scope.erp_sync import disconnect
+        from apps.scope.models import ErpConnection, Project, Task
+
+        self._sync()
+        disconnect(self.conn)
+        self.assertEqual(Task.objects.filter(is_completed=False).count(), 0)
+        self.assertFalse(ErpConnection.objects.exists())
+
+        self.conn.pk = None
+        self.conn.save()
+        disconnect(self.conn, delete_tasks=True)
+        self.assertFalse(Task.objects.filter(external_source='webstead').exists())
+        self.assertFalse(Project.objects.filter(external_source='webstead').exists())
+
+    def test_api_never_returns_token(self):
+        from apps.scope.models import ApiAccessToken
+
+        raw, _ = ApiAccessToken.issue(self.user)
+        body = self.client.get('/api/v2/erp/connections/', HTTP_AUTHORIZATION=f'Bearer {raw}').content.decode()
+        self.assertIn('Webstead', body)
+        self.assertNotIn('tok-xeno', body)
+        self.assertNotIn('token', json.loads(body)['data']['connections'][0])

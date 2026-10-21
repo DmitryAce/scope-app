@@ -209,6 +209,25 @@ class AppStore extends ChangeNotifier {
     await refresh(reprobe: false);
   }
 
+  /// Подключить ERP: готовая ([preset]) или своя по адресу. Ошибку ERP бросает наружу.
+  Future<void> connectErp({String preset = '', String baseUrl = '', String name = '', required String token}) async {
+    final data = await api.post('erp/connections/', {
+      'preset': preset,
+      'base_url': baseUrl,
+      'name': name,
+      'token': token,
+    });
+    erp = (data as Map).cast<String, dynamic>();
+    await refresh(reprobe: false);
+  }
+
+  /// Отключить ERP: задачи закрыть или удалить.
+  Future<void> disconnectErp(int id, {bool deleteTasks = false}) async {
+    final data = await api.delete('erp/connections/$id/${deleteTasks ? '?tasks=delete' : ''}');
+    erp = (data as Map).cast<String, dynamic>();
+    await refresh(reprobe: false);
+  }
+
   Future<void> _housekeepingOnceADay() async {
     final today = ymd(DateTime.now());
     if (_prefs.getString('housekeeping') == today) return;

@@ -758,47 +758,91 @@ def app_latest(request):
 
 
 # ---------- задачи из ERP ----------
+# У каждого пользователя свои подключения (адрес + зашифрованный токен).
 
 ERP_SYNC_COOLDOWN_SECONDS = 60
 
 
-def _erp_states(user) -> list[dict]:
-    from apps.scope.erp_sync import sources
-    from apps.scope.models import ErpSyncState
+def _conn_to_dict(c) -> dict:
+    return {
+        'id': c.id,
+        'source': c.source,
+        'name': c.name,
+        'base_url': c.base_url,
+        'color': c.color,
+        'last_run': c.last_run.isoformat() if c.last_run else None,
+        'open_tasks': c.open_tasks,
+        'error': c.last_error,
+    }
 
-    states = {s.source: s for s in ErpSyncState.objects.filter(user=user)}
-    out = []
-    for src in sources():
-        st = states.get(src.key)
-        out.append({
-            'source': src.key,
-            'name': src.name,
-            'last_run': st.last_run.isoformat() if st and st.last_run else None,
-            'open_tasks': st.open_tasks if st else 0,
-            'error': st.last_error if st else '',
-        })
-    return out
+
+def _erp_payload(user, ran=False) -> dict:
+    from apps.scope.erp_sync import PRESETS
+    from apps.scope.models import ErpConnection
+
+    return {
+        'enabled': True,
+        'ran': ran,
+        'connections': [_conn_to_dict(c) for c in ErpConnection.objects.filter(user=user)],
+        'presets': [{'key': k, 'name': n, 'base_url': u, 'color': col} for k, (n, u, col) in PRESETS.items()],
+    }
+
+
+@v2
+@require_http_methods(['GET', 'POST'])
+def erp_connections(request):
+    """GET — подключения и готовые варианты. POST — подключить ERP:
+    {"preset": "webstead", "token": "..."} или {"base_url": "https://...", "name": "...", "token": "..."}.
+    Токен проверяется запросом в ERP; сохраняется зашифрованным и наружу не отдаётся."""
+    from apps.scope.erp_sync import ErpError, connect, sync_connection
+
+    if request.method == 'GET':
+        return JsonResponse({'data': _erp_payload(request.user)})
+    data = _parse_body(request)
+    if data is None:
+        return _json_error('bad_json', 'Тело запроса не JSON', 400)
+    try:
+        conn = connect(
+            request.user,
+            token=str(data.get('token') or ''),
+            preset=str(data.get('preset') or ''),
+            base_url=str(data.get('base_url') or ''),
+            name=str(data.get('name') or ''),
+        )
+    except ErpError as e:
+        return _json_error('erp_error', str(e))
+    sync_connection(conn)
+    return JsonResponse({'data': _erp_payload(request.user, ran=True)}, status=201)
+
+
+@v2
+@require_http_methods(['DELETE'])
+def erp_connection_detail(request, pk: int):
+    """Отключить ERP. ?tasks=delete — удалить подтянутые задачи, иначе они закрываются."""
+    from apps.scope.erp_sync import disconnect
+    from apps.scope.models import ErpConnection
+
+    conn = ErpConnection.objects.filter(pk=pk, user=request.user).first()
+    if conn is None:
+        return _json_error('not_found', 'Подключение не найдено', 404)
+    disconnect(conn, delete_tasks=request.GET.get('tasks') == 'delete')
+    return JsonResponse({'data': _erp_payload(request.user)})
 
 
 @v2
 @require_http_methods(['GET', 'POST'])
 def erp_sync(request):
-    """GET — состояние синхронизации, POST — подтянуть задачи из ERP сейчас.
+    """GET — состояние, POST — подтянуть задачи своих подключений сейчас
+    (не чаще раза в минуту, ?force=1 — без ограничения)."""
+    from apps.scope.erp_sync import sync_user
+    from apps.scope.models import ErpConnection
 
-    Работает только для владельца ERP-токенов (ERP_SYNC_USERNAME); чаще раза
-    в минуту в ERP не ходим — приложение дёргает это при каждом обновлении.
-    """
-    from apps.scope.erp_sync import sync_all, sync_user
-    from apps.scope.models import ErpSyncState
-
-    owner = sync_user()
-    if owner is None or owner.pk != request.user.pk:
-        return JsonResponse({'data': {'enabled': False, 'sources': []}})
     ran = False
     if request.method == 'POST':
-        last = ErpSyncState.objects.filter(user=owner).order_by('-last_run').values_list('last_run', flat=True).first()
+        last = (ErpConnection.objects.filter(user=request.user, is_active=True)
+                .order_by('-last_run').values_list('last_run', flat=True).first())
         force = request.GET.get('force') in ('1', 'true')
         if force or last is None or (timezone.now() - last).total_seconds() > ERP_SYNC_COOLDOWN_SECONDS:
-            sync_all(owner)
+            sync_user(request.user)
             ran = True
-    return JsonResponse({'data': {'enabled': True, 'ran': ran, 'sources': _erp_states(owner)}})
+    return JsonResponse({'data': _erp_payload(request.user, ran=ran)})

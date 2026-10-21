@@ -551,17 +551,40 @@ class BulletTaskCompletion(models.Model):
 
 
 
-class ErpSyncState(models.Model):
-    """Как прошла последняя синхронизация с ERP — для экрана настроек."""
+class ErpConnection(models.Model):
+    """Подключение пользователя к ERP: адрес и личный API-токен (зашифрован).
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='erp_sync_states')
+    source — короткий ключ подключения у этого пользователя ('webstead', 'omniwebers'
+    или 'erp-<id>' для своей ERP); им помечены задачи и проекты, которые пришли оттуда.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='erp_connections')
     source = models.CharField(max_length=20)
+    name = models.CharField(max_length=60)
+    base_url = models.URLField(max_length=200)
+    token_encrypted = models.TextField()
+    color = models.CharField(max_length=7, default='#7C3AED')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     last_run = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True, default='')
     open_tasks = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = [('user', 'source')]
+        ordering = ['created_at']
 
     def __str__(self):
-        return f'{self.user} · {self.source}'
+        return f'{self.user} · {self.name}'
+
+    @property
+    def token(self) -> str:
+        from apps.scope.secrets import decrypt
+
+        return decrypt(self.token_encrypted)
+
+    @token.setter
+    def token(self, raw: str) -> None:
+        from apps.scope.secrets import encrypt
+
+        self.token_encrypted = encrypt(raw)

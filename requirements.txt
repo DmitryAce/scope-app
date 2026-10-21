@@ -11,3 +11,6 @@ gunicorn>=21.0
 # Static files
 whitenoise>=6.6
 
+
+# Шифрование токенов внешних подключений (ERP)
+cryptography>=42

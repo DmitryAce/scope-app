@@ -36,15 +36,13 @@ services:
       - DJANGO_SUPERUSER_USERNAME=${ADMIN_USER:-admin}
       - DJANGO_SUPERUSER_EMAIL=${ADMIN_EMAIL:-admin@scope.app}
       - DJANGO_SUPERUSER_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      # Задачи из ERP в Scope (только чтение): токены владельца и его логин в Scope.
-      - ERP_SYNC_USERNAME=${ERP_SYNC_USERNAME:-}
-      - WEBSTEAD_ERP_TOKEN=${WEBSTEAD_ERP_TOKEN:-}
-      - OMNIWEBERS_ERP_TOKEN=${OMNIWEBERS_ERP_TOKEN:-}
+      # Ключ шифрования токенов ERP в базе (по умолчанию выводится из SECRET_KEY).
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     depends_on:
       db:
         condition: service_healthy
 
-  # Раз в 5 минут подтягивает задачи из ERP (тот же образ, без веб-сервера).
+  # Раз в 5 минут подтягивает задачи из ERP всем, кто подключил ERP в приложении.
   erp_sync:
     build: .
     container_name: scope_erp_sync
@@ -55,10 +53,8 @@ services:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-long-random-string}
       - DATABASE_URL=postgres://${POSTGRES_USER:-scope}:${POSTGRES_PASSWORD:-scopepass123}@db:5432/${POSTGRES_DB:-scope}
-      # Задачи из ERP в Scope (только чтение): токены владельца и его логин в Scope.
-      - ERP_SYNC_USERNAME=${ERP_SYNC_USERNAME:-}
-      - WEBSTEAD_ERP_TOKEN=${WEBSTEAD_ERP_TOKEN:-}
-      - OMNIWEBERS_ERP_TOKEN=${OMNIWEBERS_ERP_TOKEN:-}
+      # Ключ шифрования токенов ERP в базе (по умолчанию выводится из SECRET_KEY).
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     depends_on:
       db:
         condition: service_healthy
