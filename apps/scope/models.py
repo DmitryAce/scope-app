@@ -565,6 +565,10 @@ class ErpConnection(models.Model):
     token_encrypted = models.TextField()
     color = models.CharField(max_length=7, default='#7C3AED')
     is_active = models.BooleanField(default=True)
+    # Куда класть проекты ERP, которые не нашлись у пользователя по имени.
+    root_project = models.ForeignKey(
+        'Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='erp_root_of'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     last_run = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True, default='')
@@ -588,3 +592,23 @@ class ErpConnection(models.Model):
         from apps.scope.secrets import encrypt
 
         self.token_encrypted = encrypt(raw)
+
+
+
+class ErpProjectLink(models.Model):
+    """Проект ERP → проект Scope, куда кладутся его задачи.
+
+    Связь держится на FK, поэтому проект можно переименовать, перенести или
+    объединить с другим — задачи ERP пойдут туда же.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='erp_project_links')
+    source = models.CharField(max_length=20)
+    external_id = models.CharField(max_length=64)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='erp_links')
+
+    class Meta:
+        unique_together = [('user', 'source', 'external_id')]
+
+    def __str__(self):
+        return f'{self.source}:{self.external_id} → {self.project}'

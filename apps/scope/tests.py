@@ -314,3 +314,82 @@ class ErpSyncTests(TestCase):
         self.assertIn('Webstead', body)
         self.assertNotIn('tok-xeno', body)
         self.assertNotIn('token', json.loads(body)['data']['connections'][0])
+
+
+class ErpProjectMappingTests(TestCase):
+    """Проекты ERP ложатся в свои проекты пользователя, а не в копии."""
+
+    def setUp(self):
+        from apps.scope.models import ErpConnection, Project
+
+        self.user = User.objects.create_user('xeno', password='x')
+        self.conn = ErpConnection(user=self.user, source='omniwebers', name='OmniWebers', base_url='https://erp.example')
+        self.conn.token = 't'
+        self.conn.save()
+        self.group = Project.objects.create(user=self.user, name='OmniGroup')
+        self.study = Project.objects.create(user=self.user, name='OmniStudy', parent=self.group)
+        self.erp = [
+            {'id': 1, 'title': 'A', 'project': {'id': 6, 'name': 'omnistudy'}},
+            {'id': 2, 'title': 'B', 'project': {'id': 12, 'name': 'Гранит Град'}},
+        ]
+
+    def _sync(self):
+        from apps.scope.erp_sync import sync_connection
+
+        return sync_connection(self.conn, opener=lambda u, t: {'tasks': self.erp, 'has_more': False})
+
+    def test_matches_own_project_by_name_and_keeps_link(self):
+        from apps.scope.models import Project, Task
+
+        self._sync()
+        self.assertEqual(Task.objects.get(external_id='1').project, self.study)
+        granit = Task.objects.get(external_id='2').project
+        self.assertEqual((granit.name, granit.parent.name), ('Гранит Град', 'ERP · OmniWebers'))
+
+        # Переименовал и перенёс — новые задачи этого проекта ERP идут туда же.
+        Project.objects.filter(pk=self.study.pk).update(name='Учёба', parent=None)
+        self.erp.append({'id': 3, 'title': 'C', 'project': {'id': 6, 'name': 'omnistudy'}})
+        self._sync()
+        self.assertEqual(Task.objects.get(external_id='3').project_id, self.study.pk)
+
+    def test_merge_root_group_into_own_project(self):
+        from apps.scope.models import Project, Task
+        from apps.scope.project_ops import merge_projects
+
+        self._sync()
+        omniwebers = Project.objects.create(user=self.user, name='OmniWebers', parent=self.group)
+        root = Project.objects.get(external_source='omniwebers', external_id='root')
+        merge_projects(root, omniwebers)
+        granit = Task.objects.get(external_id='2').project
+        self.assertEqual(granit.parent, omniwebers)
+        self.assertFalse(Project.objects.filter(pk=root.pk).exists())
+
+        # Новый проект ERP теперь появляется под OmniWebers, а не в новой группе.
+        self.erp.append({'id': 4, 'title': 'D', 'project': {'id': 3, 'name': 'OmniAssistant'}})
+        self._sync()
+        self.assertEqual(Task.objects.get(external_id='4').project.parent, omniwebers)
+        self.assertFalse(Project.objects.filter(name='ERP · OmniWebers').exists())
+
+    def test_merge_keeps_erp_link_and_guards_tree(self):
+        from apps.scope.models import Project, Task
+        from apps.scope.project_ops import merge_projects
+
+        self._sync()
+        granit = Task.objects.get(external_id='2').project
+        clients = Project.objects.create(user=self.user, name='Клиенты')
+        merge_projects(granit, clients)
+        self._sync()
+        self.assertEqual(Task.objects.get(external_id='2').project, clients)
+
+        with self.assertRaises(ValueError):
+            merge_projects(self.group, self.study)  # в собственный подпроект
+
+    def test_merge_api(self):
+        from apps.scope.models import ApiAccessToken, Project
+
+        raw, _ = ApiAccessToken.issue(self.user)
+        other = Project.objects.create(user=self.user, name='Дубль')
+        res = self.client.post(f'/api/v2/projects/{other.pk}/merge/', json.dumps({'target_id': self.group.pk}),
+                               content_type='application/json', HTTP_AUTHORIZATION=f'Bearer {raw}')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Project.objects.filter(pk=other.pk).exists())

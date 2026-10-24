@@ -15,6 +15,7 @@ urlpatterns = [
     path('projects/', v2.projects_collection, name='api_v2_projects'),
     path('projects/reorder/', v2.projects_reorder, name='api_v2_projects_reorder'),
     path('projects/<int:pk>/', v2.project_detail, name='api_v2_project_detail'),
+    path('projects/<int:pk>/merge/', v2.project_merge, name='api_v2_project_merge'),
     path('projects/<int:pk>/avatar/', v2.project_avatar, name='api_v2_project_avatar'),
     path('tags/', v2.tags_collection, name='api_v2_tags'),
     path('tags/<int:pk>/', v2.tag_detail, name='api_v2_tag_detail'),

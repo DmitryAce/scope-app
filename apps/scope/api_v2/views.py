@@ -846,3 +846,22 @@ def erp_sync(request):
             sync_user(request.user)
             ran = True
     return JsonResponse({'data': _erp_payload(request.user, ran=ran)})
+
+
+@v2
+@require_http_methods(['POST'])
+def project_merge(request, pk: int):
+    """Влить проект в другой: {"target_id": 5}. Задачи, подпроекты и связи с ERP переезжают."""
+    from apps.scope.project_ops import merge_projects
+
+    source = Project.objects.filter(pk=pk, user=request.user).first()
+    data = _parse_body(request) or {}
+    target = Project.objects.filter(pk=data.get('target_id') or 0, user=request.user).first()
+    if source is None or target is None:
+        return _json_error('not_found', 'Проект не найден', 404)
+    try:
+        merge_projects(source, target)
+    except ValueError as e:
+        return _json_error('validation_error', str(e))
+    target.refresh_from_db()
+    return JsonResponse({'data': project_to_dict(target)})

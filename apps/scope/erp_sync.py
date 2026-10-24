@@ -29,7 +29,7 @@ from datetime import date
 from django.db import transaction
 from django.utils import timezone
 
-from apps.scope.models import ErpConnection, Project, Task
+from apps.scope.models import ErpConnection, ErpProjectLink, Project, Task
 
 # Готовые подключения: ключ → (название, адрес, цвет).
 PRESETS = {
@@ -167,33 +167,56 @@ def disconnect(conn: ErpConnection, delete_tasks: bool = False) -> None:
         else:
             tasks.filter(is_completed=False).update(
                 is_completed=True, completed_at=timezone.now(), external_status='ERP отключена')
+        ErpProjectLink.objects.filter(user=conn.user, source=conn.source).delete()
         conn.delete()
 
 
 # ---------- синхронизация ----------
 
 def _root_project(conn: ErpConnection) -> Project:
-    project, _ = Project.objects.get_or_create(
+    """Куда класть проекты ERP, не найденные у пользователя: выбранный им проект
+    или группа «ERP · <подключение>», которая заводится при первой нужде."""
+    root = Project.objects.filter(pk=conn.root_project_id, is_archived=False).first() if conn.root_project_id else None
+    if root is not None:
+        return root
+    root, _ = Project.objects.get_or_create(
         user=conn.user, external_source=conn.source, external_id='root',
         defaults={'name': f'ERP · {conn.name}', 'color': conn.color, 'icon': 'briefcase'},
     )
-    return project
+    conn.root_project = root
+    conn.save(update_fields=['root_project'])
+    return root
+
+
+def _match_by_name(user, name: str) -> Project | None:
+    """Свой проект с тем же именем (без учёта регистра) — если он ровно один."""
+    found = list(Project.objects.filter(user=user, is_archived=False, name__iexact=name.strip())[:2])
+    return found[0] if len(found) == 1 else None
 
 
 def _erp_project(conn: ErpConnection, data: dict | None, cache: dict) -> Project:
-    if 'root' not in cache:
-        cache['root'] = _root_project(conn)
+    """Проект Scope для проекта ERP: по связке, иначе по имени, иначе новый в корне подключения."""
     if not data or not data.get('id'):
+        if 'root' not in cache:
+            cache['root'] = _root_project(conn)
         return cache['root']
     key = str(data['id'])
-    if key not in cache:
-        project, _ = Project.objects.get_or_create(
-            user=conn.user, external_source=conn.source, external_id=key,
-            defaults={'name': (data.get('name') or data.get('code') or key)[:200], 'color': conn.color,
-                      'parent': cache['root']},
-        )
-        cache[key] = project
-    return cache[key]
+    if key in cache:
+        return cache[key]
+    link = ErpProjectLink.objects.filter(user=conn.user, source=conn.source, external_id=key).select_related('project').first()
+    if link is None:
+        name = (data.get('name') or data.get('code') or key)[:200]
+        project = _match_by_name(conn.user, name)
+        if project is None:
+            if 'root' not in cache:
+                cache['root'] = _root_project(conn)
+            project = Project.objects.create(
+                user=conn.user, name=name, color=conn.color, parent=cache['root'],
+                external_source=conn.source, external_id=key,
+            )
+        link = ErpProjectLink.objects.create(user=conn.user, source=conn.source, external_id=key, project=project)
+    cache[key] = link.project
+    return link.project
 
 
 def _parse_date(value) -> date | None:
@@ -252,6 +275,8 @@ def apply_tasks(conn: ErpConnection, items: list[dict]) -> dict:
 
 
 def sync_connection(conn: ErpConnection, opener=None) -> dict:
+    # Корень могли сменить (объединили проекты) — берём свежий из базы.
+    conn.refresh_from_db(fields=['root_project'])
     try:
         token = conn.token
         if not token:

@@ -390,6 +390,11 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  Future<void> mergeProject(int sourceId, int targetId) async {
+    await api.post('projects/$sourceId/merge/', {'target_id': targetId});
+    await refresh(reprobe: false);
+  }
+
   Future<void> togglePin(Project p) => updateProject(p.id, {'is_pinned': !p.isPinned});
 
   Future<void> updateTag(int id, {String? name, String? color}) async {

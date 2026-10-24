@@ -243,6 +243,10 @@ Future<void> showProjectActions(BuildContext context, Project p) {
               Navigator.pop(c);
               openProjectEditor(context, parentId: p.id);
             }),
+          _SheetAction(PhosphorIconsRegular.arrowsMerge, 'Объединить с проектом…', () {
+            Navigator.pop(c);
+            mergeProjectFlow(context, p);
+          }),
           _SheetAction(
             p.isArchived ? PhosphorIconsRegular.arrowUUpLeft : PhosphorIconsRegular.archive,
             p.isArchived ? 'Вернуть из архива' : 'В архив',
@@ -1051,5 +1055,42 @@ class _EditTreeState extends State<_EditTree> with SingleTickerProviderStateMixi
         },
       ),
     );
+  }
+}
+
+
+/// Влить проект в другой: выбрать цель, подтвердить, задачи и подпроекты переезжают.
+/// Связи с ERP переезжают тоже — новые задачи ERP будут попадать в выбранный проект.
+Future<void> mergeProjectFlow(BuildContext context, Project p) async {
+  final store = StoreScope.read(context);
+  final banned = {p.id, ...store.descendantsOf(p.id)};
+  final targetId = await showProjectPicker(
+    context,
+    title: 'Влить «${p.name}» в…',
+    allow: (x) => !banned.contains(x.id),
+  );
+  if (targetId == null || targetId == 0 || !context.mounted) return;
+  final target = store.projectById(targetId);
+  if (target == null) return;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text('Объединить с «${target.name}»?'),
+      content: Text('Задачи и подпроекты «${p.name}» переедут в «${target.name}», '
+          'а сам «${p.name}» удалится. Задачи из ERP дальше тоже будут приходить в «${target.name}».'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Объединить')),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  try {
+    await store.mergeProject(p.id, targetId);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('«${p.name}» влит в «${target.name}»')));
+    }
+  } catch (e) {
+    if (context.mounted) showError(context, e);
   }
 }
