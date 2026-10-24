@@ -100,14 +100,41 @@ class Updater {
     final source = await inner.exists() ? inner.path : unpacked;
     final installDir = File(Platform.resolvedExecutable).parent.path;
     final script = File('$work\\apply.ps1');
-    await script.writeAsString('''
-\$ErrorActionPreference = "Stop"
-Wait-Process -Id $pid -ErrorAction SilentlyContinue
+    // Шаблон без интерполяции Dart: подставляем пути явно, $-переменные — PowerShell.
+    final ps = r'''
+$ErrorActionPreference = "Stop"
+$install = "__INSTALL__"
+$source = "__SOURCE__"
+$work = "__WORK__"
+$log = Join-Path $install "logs\update.log"
+New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
+function Log($m) { Add-Content -Path $log -Value ("{0} {1}" -f (Get-Date -Format s), $m) }
+Log "update: waiting for Scope to exit"
+# Ждём все окна Scope из папки установки (их может быть несколько), потом закрываем оставшиеся.
+$deadline = (Get-Date).AddSeconds(15)
+while ((Get-Date) -lt $deadline) {
+  $running = Get-CimInstance Win32_Process -Filter "Name='Scope.exe'" | Where-Object { $_.ExecutablePath -like "$install*" }
+  if (-not $running) { break }
+  Start-Sleep -Milliseconds 300
+}
+Get-CimInstance Win32_Process -Filter "Name='Scope.exe'" | Where-Object { $_.ExecutablePath -like "$install*" } | ForEach-Object {
+  Log "update: closing leftover pid $($_.ProcessId)"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+}
 Start-Sleep -Milliseconds 500
-Copy-Item -Path "$source\\*" -Destination "$installDir" -Recurse -Force
-Start-Process -FilePath "$installDir\\Scope.exe" -WorkingDirectory "$installDir"
-Remove-Item -Path "$work" -Recurse -Force -ErrorAction SilentlyContinue
-''');
+$ok = $false
+for ($i = 1; $i -le 10 -and -not $ok; $i++) {
+  try { Copy-Item -Path (Join-Path $source "*") -Destination $install -Recurse -Force; $ok = $true; Log "update: files copied (try $i)" }
+  catch { Log "update: copy failed (try $i): $($_.Exception.Message)"; Start-Sleep -Seconds 1 }
+}
+# Через проводник — как будто открыл пользователь (своя среда, без наследования от скрипта).
+Start-Process explorer.exe -ArgumentList ('"' + (Join-Path $install "Scope.exe") + '"')
+Log ("update: relaunched, ok=" + $ok)
+if ($ok) { Remove-Item -Path $work -Recurse -Force -ErrorAction SilentlyContinue }
+'''
+        .replaceAll('__INSTALL__', installDir)
+        .replaceAll('__SOURCE__', source)
+        .replaceAll('__WORK__', work);
+    await script.writeAsString(ps);
     await Process.start(
       'powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script.path],
