@@ -146,8 +146,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               const SliverToBoxAdapter(child: SectionHeader('Мои проекты')),
               SliverToBoxAdapter(
                 child: Group(children: [
-                  for (final (p, depth) in store.projectTree())
-                    ProjectRow(project: p, count: store.openCount(p.id), depth: depth, onLongPress: _startEditing),
+                  for (final (p, depth) in store.projectTree(visibleOnly: true))
+                    ProjectRow(
+                      project: p,
+                      count: store.openCount(p.id),
+                      depth: depth,
+                      onLongPress: _startEditing,
+                      collapsible: true,
+                    ),
                 ]),
               ),
             ],
@@ -293,7 +299,11 @@ class ProjectRow extends StatelessWidget {
     this.archived = false,
     this.hint,
     this.onLongPress,
+    this.collapsible = false,
   });
+
+  /// В дереве: стрелка слева и двойной тап сворачивают подпроекты.
+  final bool collapsible;
 
   final Project? project;
   final int count;
@@ -314,10 +324,16 @@ class ProjectRow extends StatelessWidget {
     final subtitle = hint ?? (p == null ? 'Задачи без даты' : (subs > 0 ? '$subs ${_subs(subs)}' : null));
     return InkWell(
       onTap: () => openProject(context, p),
+      // Двойной тап — только у групп в дереве, чтобы обычные строки открывались без задержки.
+      onDoubleTap: collapsible && p != null && subs > 0 ? () => store.toggleCollapsed(p.id) : null,
       onLongPress: p == null ? null : (onLongPress ?? () => showProjectActions(context, p)),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(12.0 + depth * 22, nested ? 8 : 10, 12, nested ? 8 : 10),
+        padding: EdgeInsets.fromLTRB((collapsible ? 4.0 : 12.0) + depth * 20, nested ? 8 : 10, 12, nested ? 8 : 10),
         child: Row(children: [
+          if (collapsible && p != null) ...[
+            CollapseCaret(projectId: p.id, hasChildren: subs > 0, size: 15),
+            const SizedBox(width: 4),
+          ],
           Opacity(opacity: archived ? 0.5 : 1, child: ProjectAvatar(project: p, size: nested ? 30 : 38)),
 
           const SizedBox(width: 12),

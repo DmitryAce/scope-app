@@ -231,7 +231,7 @@ class _Sidebar extends StatelessWidget {
         ),
         Expanded(
           child: ListView(padding: const EdgeInsets.only(bottom: 8), children: [
-            for (final (p, depth) in store.projectTree())
+            for (final (p, depth) in store.projectTree(visibleOnly: true))
               _ProjectTile(
                 project: p,
                 count: store.openCount(p.id),
@@ -318,19 +318,28 @@ class _ProjectTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasChildren = StoreScope.of(context).childrenOf(project.id).isNotEmpty;
     return Padding(
-      padding: EdgeInsets.fromLTRB(10.0 + depth * 16, 1, 10, 1),
+      padding: EdgeInsets.fromLTRB(8.0 + depth * 14, 1, 10, 1),
       child: Material(
         color: selected ? C.accent.withValues(alpha: 0.14) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
+          onTap: () {
+            onTap();
+            // Двойной клик сворачивает/разворачивает подпроекты.
+            if (hasChildren && DoubleTap.hit(project.id)) {
+              StoreScope.read(context).toggleCollapsed(project.id);
+            }
+          },
           onSecondaryTap: () => showProjectActions(context, project),
           onLongPress: () => showProjectActions(context, project),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(2, 6, 8, 6),
             child: Row(children: [
+              CollapseCaret(projectId: project.id, hasChildren: hasChildren, size: 14),
+              const SizedBox(width: 2),
               ProjectAvatar(project: project, size: nested ? 20 : 24),
               const SizedBox(width: 10),
               Expanded(

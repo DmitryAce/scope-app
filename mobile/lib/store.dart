@@ -67,6 +67,9 @@ class AppStore extends ChangeNotifier {
       token: token,
     );
     leadMinutes = _prefs.getInt('lead_minutes') ?? 15;
+    collapsedProjects = {
+      for (final x in _prefs.getStringList('collapsed_projects') ?? const <String>[]) ?int.tryParse(x),
+    };
     C.apply(_prefs.getString('accent') ?? accents.first.id);
     _loadCache();
     ready = true;
@@ -463,11 +466,25 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Дерево в порядке показа: (проект, глубина).
-  List<(Project, int)> projectTree({int? under, int depth = 0}) {
+  /// [visibleOnly] — не раскрывать свёрнутые группы (боковая панель, список проектов).
+  List<(Project, int)> projectTree({int? under, int depth = 0, bool visibleOnly = false}) {
     final level = under == null ? rootProjects : childrenOf(under);
     return [
-      for (final p in level) ...[(p, depth), ...projectTree(under: p.id, depth: depth + 1)],
+      for (final p in level) ...[
+        (p, depth),
+        if (!(visibleOnly && collapsedProjects.contains(p.id)))
+          ...projectTree(under: p.id, depth: depth + 1, visibleOnly: visibleOnly),
+      ],
     ];
+  }
+
+  /// Свёрнутые группы проектов — личная настройка этого устройства.
+  Set<int> collapsedProjects = {};
+
+  void toggleCollapsed(int id) {
+    collapsedProjects.contains(id) ? collapsedProjects.remove(id) : collapsedProjects.add(id);
+    _prefs.setStringList('collapsed_projects', [for (final x in collapsedProjects) '$x']);
+    notifyListeners();
   }
 
   /// Аватарка проекта, а если своей нет — родителя.

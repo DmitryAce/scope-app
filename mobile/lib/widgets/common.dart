@@ -272,3 +272,48 @@ void showError(BuildContext context, Object e) {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(msg)));
 }
+
+
+/// Второй тап по тому же элементу быстрее 350 мс. Первый тап при этом уже
+/// сработал как обычный (открыл проект) — так одиночный клик не ждёт.
+class DoubleTap {
+  static Object? _lastKey;
+  static DateTime _lastAt = DateTime(0);
+
+  static bool hit(Object key) {
+    final now = DateTime.now();
+    final isDouble = _lastKey == key && now.difference(_lastAt) < const Duration(milliseconds: 350);
+    _lastKey = isDouble ? null : key;
+    _lastAt = now;
+    return isDouble;
+  }
+}
+
+/// Стрелка свернуть/развернуть группу проектов (или пустое место того же размера).
+class CollapseCaret extends StatelessWidget {
+  const CollapseCaret({super.key, required this.projectId, required this.hasChildren, this.size = 16});
+
+  final int projectId;
+  final bool hasChildren;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasChildren) return SizedBox(width: size + 4);
+    final store = StoreScope.of(context);
+    final collapsed = store.collapsedProjects.contains(projectId);
+    return InkResponse(
+      radius: 14,
+      onTap: () => store.toggleCollapsed(projectId),
+      child: SizedBox(
+        width: size + 4,
+        height: size + 4,
+        child: AnimatedRotation(
+          turns: collapsed ? -0.25 : 0,
+          duration: const Duration(milliseconds: 160),
+          child: Icon(PhosphorIconsBold.caretDown, size: size * 0.7, color: C.muted),
+        ),
+      ),
+    );
+  }
+}
